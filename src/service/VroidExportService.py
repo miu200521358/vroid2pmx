@@ -168,7 +168,7 @@ class VroidExportService():
                 # 球体
                 if "頭" == bone.name:
                     # 頭はエルフ耳がある場合があるので、両目の間隔を使う
-                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3
+                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 2.5
                     center_vertex[0] = bone.position.x()
                     center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2
                     center_vertex[2] = bone.position.z()
@@ -393,27 +393,28 @@ class VroidExportService():
                 or "blendShapeMaster" not in model.json_data["extensions"]["VRM"] or "blendShapeGroups" not in model.json_data["extensions"]["VRM"]["blendShapeMaster"]:
             return model
 
-        # # 定義済みグループモーフ
-        # for sidx, shape in enumerate(model.json_data["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]):
-        #     if len(shape["binds"]) == 0:
-        #         continue
+        # 定義済みグループモーフ
+        for sidx, shape in enumerate(model.json_data["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]):
+            if len(shape["binds"]) == 0:
+                continue
 
-        #     morph_name = shape["name"]
-        #     morph_panel = 4
-        #     if shape["name"] in MORPH_PAIRS:
-        #         morph_name = MORPH_PAIRS[shape["name"]]["name"]
-        #         morph_panel = MORPH_PAIRS[shape["name"]]["panel"]
-        #     morph = Morph(morph_name, shape["name"], morph_panel, 0)
-        #     morph.index = len(model.morphs)
+            morph_name = shape["name"]
+            morph_panel = 4
+            if shape["name"] in MORPH_PAIRS:
+                morph_name = MORPH_PAIRS[shape["name"]]["name"]
+                morph_panel = MORPH_PAIRS[shape["name"]]["panel"]
+            morph = Morph(morph_name, shape["name"], morph_panel, 0)
+            morph.index = len(model.morphs)
             
-        #     if shape["name"] in MORPH_PAIRS and "binds" in MORPH_PAIRS[shape["name"]]:
-        #         for bind in MORPH_PAIRS[shape["name"]]["binds"]:
-        #             morph.offsets.append(GroupMorphData(model.morphs[bind].index, 1))
-        #     else:
-        #         for bind in shape["binds"]:
-        #             morph.offsets.append(GroupMorphData(bind["index"], bind["weight"] / 100))
-        #     model.morphs[morph_name] = morph
-        #     model.display_slots["表情"].references.append((1, morph.index))
+            if shape["name"] in MORPH_PAIRS and "binds" in MORPH_PAIRS[shape["name"]]:
+                for bind in MORPH_PAIRS[shape["name"]]["binds"]:
+                    morph.offsets.append(GroupMorphData(model.morphs[bind].index, 1))
+            else:
+                for bind in shape["binds"]:
+                    morph.offsets.append(GroupMorphData(bind["index"], bind["weight"] / 100))
+            model.morphs[morph_name] = morph
+            if morph_name not in DEFINED_MORPH_NAMES:
+                model.display_slots["表情"].references.append((1, morph.index))
 
         # 自前グループモーフ
         for sidx, (morph_name, morph_pair) in enumerate(MORPH_PAIRS.items()):
@@ -476,11 +477,11 @@ class VroidExportService():
                 model.bones[toe_param['edge_name']].position = edge_vertex_pos
                 model.bones[toe_param['ik_name']].position = edge_vertex_pos
         
-        for leg_bone_name in ['左足', '右足']:
+        for leg_bone_name in ['腰キャンセル左', '腰キャンセル右', '左足', '右足', '左足D', '右足D']:
             if leg_bone_name in model.bones:
                 model.bones[leg_bone_name].position.setZ(model.bones[leg_bone_name].position.z() + 0.1)
 
-        for knee_bone_name in ['左ひざ', '右ひざ']:
+        for knee_bone_name in ['左ひざ', '右ひざ', '左ひざD', '右ひざD']:
             if knee_bone_name in model.bones:
                 model.bones[knee_bone_name].position.setZ(model.bones[knee_bone_name].position.z() - 0.1)
 
@@ -1163,17 +1164,12 @@ class VroidExportService():
         # 人体以外のボーン
         for nidx, node_param in node_dict.items():
             if node_param['name'] not in bone_name_dict:
-                bone = Bone(node_param['name'], node_param['name'], node_param['position'], -1, 0, 0x0002 | 0x0008 | 0x0010)
+                bone = Bone(node_param['name'], node_param['name'], node_param['position'], -1, 0, 0x0002)
                 parent_index = bone_name_dict[node_dict[node_param['parent']]['name']]['index'] if node_param['parent'] in node_dict and node_dict[node_param['parent']]['name'] in bone_name_dict else -1   # noqa
                 bone.parent_index = parent_index
                 bone.index = len(model.bones)
                 model.bones[bone.name] = bone
                 bone_name_dict[node_param['name']] = {'index': bone.index, 'name': bone.name, 'node_name': node_param['name'], 'node_index': node_name_dict[node_param['name']]}
-
-                if "Hair" in bone.name:
-                    model.display_slots["髪"].references.append((0, bone.index))
-                else:
-                    model.display_slots["その他"].references.append((0, bone.index))
 
         # 表示先・ローカル軸・IK設定
         for bone in model.bones.values():
@@ -1217,7 +1213,13 @@ class VroidExportService():
                 tail_index = bone_name_dict[node_dict[node_param['children'][0]]['name']]['index'] if node_param['children'] and node_param['children'][0] in node_dict and node_dict[node_param['children'][0]]['name'] in bone_name_dict else -1   # noqa
                 if tail_index >= 0:
                     bone.tail_index = tail_index
-                    bone.flag |= 0x0001
+                    bone.flag |= 0x0001 | 0x0008 | 0x0010
+
+                if "Hair" in bone.name:
+                    if bone.tail_index >= 0:
+                        model.display_slots["髪"].references.append((0, bone.index))
+                else:
+                    model.display_slots["その他"].references.append((0, bone.index))
 
         logger.info("-- ボーンデータ解析終了")
 
@@ -1724,6 +1726,23 @@ MORPH_EYEBROW = 1
 MORPH_EYE = 2
 MORPH_LIP = 3
 MORPH_OTHER = 4
+
+DEFINED_MORPH_NAMES = [
+    "Neutral",
+    "A",
+    "I",
+    "U",
+    "E",
+    "O",
+    "Blink",
+    "Blink_L",
+    "Blink_R",
+    "Angry",
+    "Fun",
+    "Joy",
+    "Sorrow",
+    "Surprised",
+]
 
 MORPH_PAIRS = {
     "Fcl_BRW_Fun": {"name": "眉にっこり", "panel": MORPH_EYEBROW},

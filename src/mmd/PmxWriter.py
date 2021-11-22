@@ -279,9 +279,9 @@ class PmxWriter:
             logger.info("-- ボーンデータ出力終了(%s)", len(list(pmx.bones.values())))
 
             # モーフの数
-            self.write_number(fout, TYPE_INT, len(list(pmx.morphs.values())))
+            self.write_number(fout, TYPE_INT, len(list(pmx.org_morphs.values())))
 
-            for midx, morph in enumerate(pmx.morphs.values()):
+            for midx, morph in enumerate(pmx.org_morphs.values()):
                 # モーフ名
                 self.write_text(fout, morph.name, f"Morph {midx}")
                 self.write_text(fout, morph.english_name, f"Morph {midx}")

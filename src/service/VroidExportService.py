@@ -177,7 +177,7 @@ class VroidExportService():
                     # それ以外（胸とか）はそのまま
                     max_size = np.max(diff_size / 2)
                     shape_size = MVector3D(max_size, max_size, max_size)
-                    center_vertex = bone.position + (tail_position - bone.position) / 2
+                    center_vertex = bone.position
             else:
                 # カプセルと箱
                 axis_vec = tail_position - bone.position

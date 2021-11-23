@@ -216,13 +216,13 @@ class VroidExportService():
                         shape_size = MVector3D(diff_size[1] * 0.26, abs(axis_vec.x() * 1), diff_size[2])
                     elif '上' in bone.name or '下' in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.3, abs(axis_vec.y() * 0.5), diff_size[2])
+                        shape_size = MVector3D(diff_size[0] * 0.4, abs(axis_vec.y() * 0.5), diff_size[2])
                     elif '首' == bone.name:
                         # 首の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(diff_size[0] * 0.2, abs(axis_vec.y() * 0.8), diff_size[2])
                     else:
                         # 足の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.4, abs(axis_vec.y() * 0.9), diff_size[2])
+                        shape_size = MVector3D(diff_size[0] * 0.55, abs(axis_vec.y() * 1), diff_size[2])
 
                     center_vertex = bone.position + (tail_position - bone.position) / 2
 
@@ -239,7 +239,7 @@ class VroidExportService():
     def create_bone_vertices(self, model: PmxModel):
         bone_vertices = {}
         for vertex in model.vertex_dict.values():
-            for bone_idx in vertex.deform.get_idx_list(0.4):
+            for bone_idx in vertex.deform.get_idx_list(0.3):
                 if bone_idx not in bone_vertices:
                     bone_vertices[bone_idx] = []
                 bone = model.bones[model.bone_indexes[bone_idx]]
@@ -435,7 +435,8 @@ class VroidExportService():
                 if morph_name in model.org_morphs:
                     morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
                     morph.index = len(model.org_morphs)
-                    morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, 1))
+                    ratio = 0.7 if morph_pair["panel"] == MORPH_LIP else 1
+                    morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, ratio))
 
                     model.org_morphs[morph_pair["name"]] = morph
                     model.display_slots["表情"].references.append((1, morph.index))
@@ -477,6 +478,8 @@ class VroidExportService():
                 # 末端頂点の位置をつま先ボーンの位置として割り当て
                 toe_vertices = sorted(toe_param['vertices'], key=lambda v: v.z())
                 edge_vertex_pos = toe_vertices[0]
+                # Yは0に固定
+                edge_vertex_pos.setY(0)
                 model.bones[toe_param['edge_name']].position = edge_vertex_pos
                 model.bones[toe_param['ik_name']].position = edge_vertex_pos
         
@@ -494,16 +497,8 @@ class VroidExportService():
         for bidx, bone in enumerate(model.bones.values()):
             node_name = bone.name
             if '_' in bone.name:
-                if "Hair" in bone.name:
-                    node_names = bone.name.split('-')
-                    if len(node_names[-1]) <= 2:
-                        node_block_name = bone.name[:-len(node_names[-1])]
-                    else:
-                        node_names = bone.name.split('_')
-                        node_block_name = node_names[0]
-                else:
-                    node_names = bone.name.split('_')
-                    node_block_name = node_names[0]
+                node_names = bone.name.split('_')
+                node_block_name = node_names[0]
                 bone_block = None
                 bone_name = None
 
@@ -515,14 +510,23 @@ class VroidExportService():
                     other_blocks[node_block_name]['size'] += 1
                 else:
                     if "Hair" in bone.name:
-                        bone_block = {"bone_block_name": "髪", "bone_block_size": len(hair_blocks) + 1, "size": 1}
+                        if len(hair_blocks) > 0:
+                            bone_block_size = hair_blocks[list(hair_blocks.keys())[-1]]["bone_block_size"] + 1
+                        else:
+                            bone_block_size = 1
+                        bone_block = {"bone_block_name": "髪", "bone_block_size": bone_block_size, "size": 1}
                         hair_blocks[node_block_name] = bone_block
                     else:
-                        bone_block = {"bone_block_name": "装飾", "bone_block_size": len(other_blocks) + 1, "size": 1}
+                        if len(other_blocks) > 0:
+                            bone_block_size = other_blocks[list(other_blocks.keys())[-1]]["bone_block_size"] + 1
+                        else:
+                            bone_block_size = 1
+                        bone_block = {"bone_block_name": "装飾", "bone_block_size": bone_block_size, "size": 1}
                         other_blocks[node_block_name] = bone_block
                 bone_name = f'{bone_block["bone_block_name"]}_{bone_block["bone_block_size"]:02d}-{bone_block["size"]:02d}'
 
                 if "Hair" not in bone.name and len(node_names) > 1:
+                    # 装飾の場合、末尾を入れる
                     bone_name += bone.name[len(node_names[0]):]
 
                 if "Hair" in bone.name and not bone.getVisibleFlag():
@@ -1779,6 +1783,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close_L": {"name": "まばたき左", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
+    "EYE_Laugh": {"name": "笑い", "panel": MORPH_EYE, "binds": ["ウィンク", "ウィンク右"]},
     "Fcl_EYE_Fun": {"name": "喜び", "panel": MORPH_EYE},
     "Fcl_EYE_Angry": {"name": "キリッ", "panel": MORPH_EYE},
     "Fcl_EYE_Sorrow": {"name": "ジト目", "panel": MORPH_EYE},
@@ -1824,7 +1829,7 @@ MORPH_PAIRS = {
     "Fcl_MTH_Small": {"name": "すぼめる", "panel": MORPH_LIP},
     "Fcl_MTH_Large": {"name": "いー", "panel": MORPH_LIP},
     "Fcl_MTH_Fun": {"name": "にんまり", "panel": MORPH_LIP},
-    "Fcl_MTH_Joy": {"name": "あー", "panel": MORPH_LIP},
+    "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
     "Fcl_MTH_Sorrow": {"name": "△", "panel": MORPH_LIP},
     "Fcl_MTH_Surprised": {"name": "わー", "panel": MORPH_LIP},
     

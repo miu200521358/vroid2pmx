@@ -422,7 +422,7 @@ class VroidExportService():
         # 自前グループモーフ
         for sidx, (morph_name, morph_pair) in enumerate(MORPH_PAIRS.items()):
             if "binds" in morph_pair:
-                morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
+                morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 0)
                 morph.index = len(model.org_morphs)
                 for bind_name in morph_pair["binds"]:
                     if bind_name in model.org_morphs:
@@ -431,6 +431,26 @@ class VroidExportService():
                             morph.offsets.append(GroupMorphData(group_morph.morph_index, group_morph.value))
                 model.org_morphs[morph_pair["name"]] = morph
                 model.display_slots["表情"].references.append((1, morph.index))
+            elif "split" in morph_pair:
+                # 元のモーフを左右に分割する
+                org_morph = model.org_morphs[morph_pair["split"]]
+                target_offset = []
+                if org_morph.morph_type == 1:
+                    for offset in org_morph.offsets:
+                        vertex = model.vertex_dict[offset.vertex_index]
+                        if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0):
+                            if morph_pair["panel"] == MORPH_LIP:
+                                # リップは中央にいくに従ってオフセットを弱める(最大値は0.7)
+                                ratio = 1 if abs(vertex.position.x()) >= 0.2 else calc_ratio(abs(vertex.position.x()), 0, 0.2, 0, 0.7)
+                                target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
+                            else:
+                                target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset.copy()))
+                if target_offset:
+                    morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
+                    morph.index = len(model.org_morphs)
+                    morph.offsets = target_offset
+
+                    model.org_morphs[morph_pair["name"]] = morph
             else:
                 if morph_name in model.org_morphs:
                     morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
@@ -529,12 +549,12 @@ class VroidExportService():
                     # 装飾の場合、末尾を入れる
                     bone_name += bone.name[len(node_names[0]):]
 
-                if "Hair" in bone.name and not bone.getVisibleFlag():
+                if "Hair" in bone.name and not bone.getVisibleFlag() and node_block_name in hair_blocks:
                     # ベータ版の場合、連番が取れないので非表示でサイズクリア
                     hair_blocks[node_block_name]['bone_block_size'] += 1
                     hair_blocks[node_block_name]['size'] = 0
 
-                if "Hair" not in bone.name and not bone.getVisibleFlag():
+                if "Hair" not in bone.name and not bone.getVisibleFlag() and node_block_name in other_blocks:
                     # ベータ版の場合、連番が取れないので非表示でサイズクリア
                     other_blocks[node_block_name]['bone_block_size'] += 1
                     other_blocks[node_block_name]['size'] = 0
@@ -695,7 +715,7 @@ class VroidExportService():
                             # 法線データ
                             extra_normals = self.read_from_accessor(model, target["NORMAL"])
 
-                            morph = Morph(extra, extra, 1, 1)
+                            morph = Morph(extra, extra, MORPH_OTHER, 1)
                             morph.index = eidx
 
                             morph_vertex_idx = vertex_idx
@@ -816,15 +836,15 @@ class VroidExportService():
 
                         if os.path.exists(os.path.join(tex_dir_path, hair_img_name)) and os.path.exists(os.path.join(tex_dir_path, hair_spe_name)):
                             # スペキュラファイルがある場合
-                            hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name))
+                            hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name)).convert('RGBA')
                             hair_ary = np.array(hair_img)
 
-                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name))
+                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert('RGBA')
                             spe_ary = np.array(spe_img)
 
                             # 拡散色の画像
                             diffuse_ary = np.array(material_ext["vectorProperties"]["_Color"])
-                            diffuse_img = Image.fromarray(np.tile(diffuse_ary * 255, (hair_ary.shape[0], hair_ary.shape[1], 1)).astype(np.uint8))
+                            diffuse_img = Image.fromarray(np.tile(diffuse_ary * 255, (hair_ary.shape[0], hair_ary.shape[1], 1)).astype(np.uint8), mode='RGBA')
                             hair_diffuse_img = ImageChops.multiply(hair_img, diffuse_img)
 
                             # 反射色の画像
@@ -833,7 +853,7 @@ class VroidExportService():
                                 emissive_ary = np.append(emissive_ary, 1)
                             else:
                                 emissive_ary = np.array([0, 0, 0, 1])
-                            emissive_img = Image.fromarray(np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8))
+                            emissive_img = Image.fromarray(np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8), mode='RGBA')
                             # 乗算
                             hair_emissive_img = ImageChops.multiply(spe_img, emissive_img)
                             # スクリーン
@@ -1071,6 +1091,9 @@ class VroidExportService():
         node_dict = {}
         node_name_dict = {}
         for nidx, node in enumerate(model.json_data['nodes']):
+            if 'translation' not in node:
+                continue
+            
             node = model.json_data['nodes'][nidx]
             logger.debug(f'[{nidx:03d}] node: {node}')
 
@@ -1282,7 +1305,7 @@ class VroidExportService():
                 return None, None
 
             if "VRoid Studio-1.0." not in model.json_data['extensions']['VRM']['exporterVersion']:
-                logger.error("VRoid Studio 1.0.x で出力されたvrmデータではないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
+                logger.error("VRoid Studio 1.0.x で出力されたvrmデータではないため、処理を中断します。\n出力元: %s", model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
                 return None, None
 
             if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'meta' not in model.json_data['extensions']['VRM']:
@@ -1510,6 +1533,12 @@ class VroidExportService():
             result = None
 
         return result
+
+
+def calc_ratio(ratio: float, oldmin: float, oldmax: float, newmin: float, newmax: float):
+    # https://qastack.jp/programming/929103/convert-a-number-range-to-another-range-maintaining-ratio
+    # NewValue = (((OldValue - OldMin) * (NewMax - NewMin)) / (OldMax - OldMin)) + NewMin
+    return (((ratio - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin
 
 
 DELETE_BONES = [
@@ -1764,12 +1793,22 @@ DEFINED_MORPH_NAMES = [
 ]
 
 MORPH_PAIRS = {
-    "Fcl_BRW_Fun": {"name": "眉にっこり", "panel": MORPH_EYEBROW},
-    "Fcl_BRW_Joy": {"name": "眉にこり", "panel": MORPH_EYEBROW},
-    "Fcl_BRW_Sorrow": {"name": "／＼", "panel": MORPH_EYEBROW},
-    "Fcl_BRW_Angry": {"name": "＼／", "panel": MORPH_EYEBROW},
-    "Fcl_BRW_Surprised": {"name": "眉驚き", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉きょとん", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Fun": {"name": "にこり", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Fun_R": {"name": "にこり右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Fun"},
+    "Fcl_BRW_Fun_L": {"name": "にこり左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Fun"},
+    "Fcl_BRW_Joy": {"name": "にこり2", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Joy_R": {"name": "にこり2右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Joy"},
+    "Fcl_BRW_Joy_L": {"name": "にこり2左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Joy"},
+    "Fcl_BRW_Sorrow": {"name": "困り", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Sorrow_R": {"name": "困り右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Sorrow"},
+    "Fcl_BRW_Sorrow_L": {"name": "困り左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Sorrow"},
+    "Fcl_BRW_Angry": {"name": "怒り", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Angry_R": {"name": "怒り右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Angry"},
+    "Fcl_BRW_Angry_L": {"name": "怒り左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Angry"},
+    "Fcl_BRW_Surprised": {"name": "驚き", "panel": MORPH_EYEBROW},
+    "Fcl_BRW_Surprised_R": {"name": "驚き右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
+    "Fcl_BRW_Surprised_L": {"name": "驚き左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
+    # "": {"name": "きょとん", "panel": MORPH_EYEBROW},
     # "": {"name": "眉下左", "panel": MORPH_EYEBROW},
     # "": {"name": "眉下右", "panel": MORPH_EYEBROW},
     # "": {"name": "眉下", "panel": MORPH_EYEBROW, "binds": ["眉下左", "眉下右"]},
@@ -1785,12 +1824,26 @@ MORPH_PAIRS = {
     "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
     "EYE_Laugh": {"name": "笑い", "panel": MORPH_EYE, "binds": ["ウィンク", "ウィンク右"]},
     "Fcl_EYE_Fun": {"name": "喜び", "panel": MORPH_EYE},
+    "Fcl_EYE_Fun_R": {"name": "喜び右", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
+    "Fcl_EYE_Fun_L": {"name": "喜び左", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Angry": {"name": "キリッ", "panel": MORPH_EYE},
-    "Fcl_EYE_Sorrow": {"name": "ジト目", "panel": MORPH_EYE},
-    "Fcl_EYE_Spread": {"name": "見開く", "panel": MORPH_EYE},
-    "Fcl_EYE_Surprised": {"name": "なぬ", "panel": MORPH_EYE},
+    "Fcl_EYE_Angry_R": {"name": "キリッ右", "panel": MORPH_EYE, "split": "Fcl_EYE_Angry"},
+    "Fcl_EYE_Angry_L": {"name": "キリッ左", "panel": MORPH_EYE, "split": "Fcl_EYE_Angry"},
+    "Fcl_EYE_Sorrow": {"name": "じと目", "panel": MORPH_EYE},
+    "Fcl_EYE_Sorrow_R": {"name": "じと目右", "panel": MORPH_EYE, "split": "Fcl_EYE_Sorrow"},
+    "Fcl_EYE_Sorrow_L": {"name": "じと目左", "panel": MORPH_EYE, "split": "Fcl_EYE_Sorrow"},
+    "Fcl_EYE_Spread": {"name": "見開き", "panel": MORPH_EYE},
+    "Fcl_EYE_Spread_R": {"name": "見開き右", "panel": MORPH_EYE, "split": "Fcl_EYE_Spread"},
+    "Fcl_EYE_Spread_L": {"name": "見開き左", "panel": MORPH_EYE, "split": "Fcl_EYE_Spread"},
+    "Fcl_EYE_Surprised": {"name": "びっくり", "panel": MORPH_EYE},
+    "Fcl_EYE_Surprised_R": {"name": "びっくり右", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
+    "Fcl_EYE_Surprised_L": {"name": "びっくり左", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
     "Fcl_EYE_Iris_Hide": {"name": "白目", "panel": MORPH_EYE},
+    "Fcl_EYE_Iris_Hide_R": {"name": "白目右", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
+    "Fcl_EYE_Iris_Hide_L": {"name": "白目左", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
+    "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
+    "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     # "": {"name": "目上左", "panel": MORPH_EYE},
     # "": {"name": "目上右", "panel": MORPH_EYE},
     # "": {"name": "目上", "panel": MORPH_EYE, "binds": ["目上左", "目上右"]},
@@ -1822,13 +1875,17 @@ MORPH_PAIRS = {
     "Fcl_MTH_U": {"name": "う", "panel": MORPH_LIP},
     "Fcl_MTH_E": {"name": "え", "panel": MORPH_LIP},
     "Fcl_MTH_O": {"name": "お", "panel": MORPH_LIP},
-    "Fcl_MTH_Neutral": {"name": "穏やか", "panel": MORPH_LIP},
+    "Fcl_MTH_Neutral": {"name": "口閉じ", "panel": MORPH_LIP},
     "Fcl_MTH_Up": {"name": "口上", "panel": MORPH_LIP},
     "Fcl_MTH_Down": {"name": "口下", "panel": MORPH_LIP},
-    "Fcl_MTH_Angry": {"name": "へ", "panel": MORPH_LIP},
+    "Fcl_MTH_Angry": {"name": "む", "panel": MORPH_LIP},
+    "Fcl_MTH_Angry_R": {"name": "む右", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
+    "Fcl_MTH_Angry_L": {"name": "む左", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
     "Fcl_MTH_Small": {"name": "すぼめる", "panel": MORPH_LIP},
     "Fcl_MTH_Large": {"name": "いー", "panel": MORPH_LIP},
-    "Fcl_MTH_Fun": {"name": "にんまり", "panel": MORPH_LIP},
+    "Fcl_MTH_Fun": {"name": "にやり", "panel": MORPH_LIP},
+    "Fcl_MTH_Fun_R": {"name": "にやり右", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
+    "Fcl_MTH_Fun_L": {"name": "にやり左", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
     "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
     "Fcl_MTH_Sorrow": {"name": "△", "panel": MORPH_LIP},
     "Fcl_MTH_Surprised": {"name": "わー", "panel": MORPH_LIP},

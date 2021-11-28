@@ -797,23 +797,27 @@ class VroidExportService():
                 if material_name not in materials_by_type[material_key]:
                     # VRMの材質拡張情報
                     material_ext = [m for m in model.json_data["extensions"]["VRM"]["materialProperties"] if m["name"] == material_name][0]
+                    # 非透過度
                     # 拡散色
                     diffuse_color_data = vrm_material["pbrMetallicRoughness"]["baseColorFactor"]
-                    diffuse_color = MVector3D(*diffuse_color_data[:3])
-                    # 非透過度
                     alpha = diffuse_color_data[3]
-                    # 反射色
-                    if "emissiveFactor" in vrm_material:
-                        specular_color_data = vrm_material["emissiveFactor"]
-                        specular_color = MVector3D(*specular_color_data[:3])
-                    else:
-                        specular_color = MVector3D()
                     specular_factor = 0
-                    # 環境色
-                    if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
-                        ambient_color = MVector3D(*material_ext["vectorProperties"]["_ShadeColor"][:3])
-                    else:
-                        ambient_color = diffuse_color / 2
+                    # diffuse_color = MVector3D(*diffuse_color_data[:3])
+                    # # 反射色
+                    # if "emissiveFactor" in vrm_material:
+                    #     specular_color_data = vrm_material["emissiveFactor"]
+                    #     specular_color = MVector3D(*specular_color_data[:3])
+                    # else:
+                    #     specular_color = MVector3D()
+                    # # 環境色
+                    # if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
+                    #     ambient_color = MVector3D(*material_ext["vectorProperties"]["_ShadeColor"][:3])
+                    # else:
+                    #     ambient_color = diffuse_color / 2
+                    # 拡散色・反射色・環境色は固定とする
+                    diffuse_color = MVector3D(1, 1, 1)
+                    specular_color = MVector3D()
+                    ambient_color = diffuse_color * 0.5
                     # 0x02:地面影, 0x04:セルフシャドウマップへの描画, 0x08:セルフシャドウの描画
                     flag = 0x02 | 0x04 | 0x08
                     if vrm_material["doubleSided"]:
@@ -863,10 +867,10 @@ class VroidExportService():
                             model.textures.append(os.path.join("tex", hair_blend_name))
                             texture_index = len(model.textures) - 1
 
-                            # 拡散色と環境色は固定
-                            diffuse_color = MVector3D(1, 1, 1)
-                            specular_color = MVector3D()
-                            ambient_color = diffuse_color / 2
+                            # # 拡散色と環境色は固定
+                            # diffuse_color = MVector3D(1, 1, 1)
+                            # specular_color = MVector3D()
+                            # ambient_color = diffuse_color * 0.5
                         else:
                             # スペキュラがない場合、ないし反映させない場合、そのまま設定
                             texture_index = material_ext["textureProperties"]["_MainTex"] + 1
@@ -883,7 +887,10 @@ class VroidExportService():
 
                     if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
                         toon_sharing_flag = 0
-                        toon_img_name = f'{material_name}_TOON.bmp'
+                        if material_ext["textureProperties"]["_MainTex"] < len(model.json_data["images"]):
+                            toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]]["name"]}_Toon.bmp'
+                        else:
+                            toon_img_name = f'{material_name}_Toon.bmp'
                         
                         toon_light_ary = np.tile(np.array([255, 255, 255, 255]), (24, 32, 1))
                         toon_shadow_ary = np.tile(np.array(material_ext["vectorProperties"]["_ShadeColor"]) * 255, (8, 32, 1))

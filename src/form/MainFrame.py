@@ -206,7 +206,7 @@ class MainFrame(wx.Frame):
         self.file_panel_ctrl.gauge_ctrl.SetValue(0)
 
         # チェックボタンに切り替え
-        self.file_panel_ctrl.export_btn_ctrl.SetLabel(logger.transtext("PmxTailor実行"))
+        self.file_panel_ctrl.export_btn_ctrl.SetLabel(self.file_panel_ctrl.txt_exec)
         self.file_panel_ctrl.export_btn_ctrl.Enable()
 
         if not event.result:
@@ -279,7 +279,7 @@ class MainFrame(wx.Frame):
     # スレッド実行結果
     def on_exec_result(self, event: wx.Event):
         # 実行ボタンに切り替え
-        self.file_panel_ctrl.export_btn_ctrl.SetLabel(logger.transtext("PmxTailor実行"))
+        self.file_panel_ctrl.export_btn_ctrl.SetLabel(self.file_panel_ctrl.txt_exec)
         self.file_panel_ctrl.export_btn_ctrl.Enable()
 
         self.elapsed_time += event.elapsed_time

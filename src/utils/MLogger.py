@@ -288,7 +288,7 @@ class MLogger():
 
     def transtext(self, msg):
         trans_msg = msg
-        if msg in self.messages:
+        if msg in self.messages and self.messages[msg]:
             # メッセージがある場合、それで出力する
             trans_msg = self.messages[msg]
 

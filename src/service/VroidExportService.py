@@ -313,6 +313,7 @@ class VroidExportService():
             model.bones[bone_name].position = bone_vec
 
         local_y_vector = MVector3D(0, -1, 0)
+        local_z_vector = MVector3D(0, 0, -1)
         for bone_name, bone_mat in trans_bone_mats.items():
             bone = model.bones[bone_name]
             direction = bone.name[0]
@@ -324,29 +325,30 @@ class VroidExportService():
             # ローカル軸
             if bone.name in ['右肩', '左肩'] and arm_bone_name in model.bones:
                 bone.local_x_vector = (model.bones[arm_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             if bone.name in ['右腕', '左腕'] and elbow_bone_name in model.bones:
                 bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             if bone.name in ['右ひじ', '左ひじ'] and wrist_bone_name in model.bones:
+                # ローカルYで曲げる
                 bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(local_y_vector, bone.local_x_vector).normalized()
             if bone.name in ['右手首', '左手首'] and finger_bone_name in model.bones:
                 bone.local_x_vector = (model.bones[finger_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             # 捩り
             if bone.name in ['右腕捩', '左腕捩'] and arm_bone_name in model.bones and elbow_bone_name in model.bones:
                 bone.fixed_axis = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
                 bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             if bone.name in ['右手捩', '左手捩'] and elbow_bone_name in model.bones and wrist_bone_name in model.bones:
                 bone.fixed_axis = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
                 bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             # 指
             if bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]['display'] and '指' in BONE_PAIRS[bone.english_name]['display']:
                 bone.local_x_vector = (model.bones[model.bone_indexes[bone.tail_index]].position - model.bones[model.bone_indexes[bone.parent_index]].position).normalized()    # noqa
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector)
+                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
 
         for vertex_idx, vertex_relative_poses in all_vertex_relative_poses.items():
             if vertex_idx not in trans_vertex_vecs:
@@ -497,7 +499,7 @@ class VroidExportService():
             if len(toe_param['vertices']) > 0:
                 # 末端頂点の位置をつま先ボーンの位置として割り当て
                 toe_vertices = sorted(toe_param['vertices'], key=lambda v: v.z())
-                edge_vertex_pos = toe_vertices[0]
+                edge_vertex_pos = toe_vertices[0].copy()
                 # Yは0に固定
                 edge_vertex_pos.setY(0)
                 model.bones[toe_param['edge_name']].position = edge_vertex_pos
@@ -511,146 +513,95 @@ class VroidExportService():
             if knee_bone_name in model.bones:
                 model.bones[knee_bone_name].position.setZ(model.bones[knee_bone_name].position.z() - 0.1)
 
-        # 人体以外のボーン
-        hair_blocks = {}
-        other_blocks = {}
-        for bidx, bone in enumerate(model.bones.values()):
-            node_name = bone.name
-            if '_' in bone.name:
-                node_names = bone.name.split('_')
-                node_block_name = node_names[0]
-                bone_block = None
-                bone_name = None
-
-                if node_block_name in hair_blocks:
-                    bone_block = hair_blocks[node_block_name]
-                    hair_blocks[node_block_name]['size'] += 1
-                elif node_block_name in other_blocks:
-                    bone_block = other_blocks[node_block_name]
-                    other_blocks[node_block_name]['size'] += 1
-                else:
-                    if "Hair" in bone.name:
-                        if len(hair_blocks) > 0:
-                            bone_block_size = hair_blocks[list(hair_blocks.keys())[-1]]["bone_block_size"] + 1
-                        else:
-                            bone_block_size = 1
-                        bone_block = {"bone_block_name": "髪", "bone_block_size": bone_block_size, "size": 1}
-                        hair_blocks[node_block_name] = bone_block
-                    else:
-                        if len(other_blocks) > 0:
-                            bone_block_size = other_blocks[list(other_blocks.keys())[-1]]["bone_block_size"] + 1
-                        else:
-                            bone_block_size = 1
-                        bone_block = {"bone_block_name": "装飾", "bone_block_size": bone_block_size, "size": 1}
-                        other_blocks[node_block_name] = bone_block
-                bone_name = f'{bone_block["bone_block_name"]}_{bone_block["bone_block_size"]:02d}-{bone_block["size"]:02d}'
-
-                if "Hair" not in bone.name and len(node_names) > 1:
-                    # 装飾の場合、末尾を入れる
-                    bone_name += bone.name[len(node_names[0]):]
-
-                if "Hair" in bone.name and not bone.getVisibleFlag() and node_block_name in hair_blocks:
-                    # ベータ版の場合、連番が取れないので非表示でサイズクリア
-                    hair_blocks[node_block_name]['bone_block_size'] += 1
-                    hair_blocks[node_block_name]['size'] = 0
-
-                if "Hair" not in bone.name and not bone.getVisibleFlag() and node_block_name in other_blocks:
-                    # ベータ版の場合、連番が取れないので非表示でサイズクリア
-                    other_blocks[node_block_name]['bone_block_size'] += 1
-                    other_blocks[node_block_name]['size'] = 0
-
-                bone.name = bone_name
-                bone.english_name = node_name
-
-        # 不要ボーンを削除
-        for bone_name in DELETE_BONES:
-            if bone_name in model.bones:
-                del model.bones[bone_name]
+        # # 不要ボーンを削除
+        # for bone_name in DELETE_BONES:
+        #     if bone_name in model.bones:
+        #         del model.bones[bone_name]
         
-        # ボーン名をキーにしているので一旦クリア
-        org_bones = cPickle.loads(cPickle.dumps(model.bones, -1))
-        model.bones = {}
+        # # ボーン名をキーにしているので一旦クリア
+        # org_bones = cPickle.loads(cPickle.dumps(model.bones, -1))
+        # model.bones = {}
 
-        reset_bones = {}
-        for bidx, (bone_name, bone) in enumerate(org_bones.items()):
-            reset_bones[bone.index] = {'name': bone.name, 'index': bidx}
-            bone.index = bidx
-            model.bones[bone.name] = bone
-            model.bone_indexes[bidx] = bone.name
+        # reset_bones = {}
+        # for bidx, (bone_name, bone) in enumerate(org_bones.items()):
+        #     reset_bones[bone.index] = {'name': bone.name, 'index': bidx}
+        #     bone.index = bidx
+        #     model.bones[bone.name] = bone
+        #     model.bone_indexes[bidx] = bone.name
 
-        for rigidbody in model.rigidbodies.values():
-            if rigidbody.bone_index in reset_bones:
-                rigidbody.bone_index = reset_bones[rigidbody.bone_index]['index']
-            else:
-                rigidbody.bone_index = -1
+        # for rigidbody in model.rigidbodies.values():
+        #     if rigidbody.bone_index in reset_bones:
+        #         rigidbody.bone_index = reset_bones[rigidbody.bone_index]['index']
+        #     else:
+        #         rigidbody.bone_index = -1
 
-        for display_slot in model.display_slots.values():
-            new_references = []
-            for display_type, bone_idx in display_slot.references:
-                if display_type == 0:
-                    if bone_idx in reset_bones:
-                        new_references.append((display_type, reset_bones[bone_idx]['index']))
-                else:
-                    new_references.append((display_type, bone_idx))
-            display_slot.references = new_references
+        # for display_slot in model.display_slots.values():
+        #     new_references = []
+        #     for display_type, bone_idx in display_slot.references:
+        #         if display_type == 0:
+        #             if bone_idx in reset_bones:
+        #                 new_references.append((display_type, reset_bones[bone_idx]['index']))
+        #         else:
+        #             new_references.append((display_type, bone_idx))
+        #     display_slot.references = new_references
 
-        for morph in model.org_morphs.values():
-            if morph.morph_type == 2:
-                new_offsets = []
-                for offset in morph.offsets:
-                    if type(offset) is BoneMorphData:
-                        if offset.bone_index in reset_bones:
-                            offset.bone_index = reset_bones[offset.bone_index]['index']
-                            new_offsets.append(offset)
-                        else:
-                            offset.bone_index = -1
-                            new_offsets.append(offset)
-                    else:
-                        new_offsets.append(offset)
-                morph.offsets = new_offsets
+        # for morph in model.org_morphs.values():
+        #     if morph.morph_type == 2:
+        #         new_offsets = []
+        #         for offset in morph.offsets:
+        #             if type(offset) is BoneMorphData:
+        #                 if offset.bone_index in reset_bones:
+        #                     offset.bone_index = reset_bones[offset.bone_index]['index']
+        #                     new_offsets.append(offset)
+        #                 else:
+        #                     offset.bone_index = -1
+        #                     new_offsets.append(offset)
+        #             else:
+        #                 new_offsets.append(offset)
+        #         morph.offsets = new_offsets
 
-        for bidx, bone in enumerate(model.bones.values()):
-            if bone.parent_index in reset_bones:
-                bone.parent_index = reset_bones[bone.parent_index]['index']
-            else:
-                bone.parent_index = -1
+        # for bidx, bone in enumerate(model.bones.values()):
+        #     if bone.parent_index in reset_bones:
+        #         bone.parent_index = reset_bones[bone.parent_index]['index']
+        #     else:
+        #         bone.parent_index = -1
 
-            if bone.getConnectionFlag():
-                if bone.tail_index in reset_bones:
-                    bone.tail_index = reset_bones[bone.tail_index]['index']
-                else:
-                    bone.tail_index = -1
+        #     if bone.getConnectionFlag():
+        #         if bone.tail_index in reset_bones:
+        #             bone.tail_index = reset_bones[bone.tail_index]['index']
+        #         else:
+        #             bone.tail_index = -1
 
-            if bone.getExternalRotationFlag() or bone.getExternalTranslationFlag():
-                if bone.effect_index in reset_bones:
-                    bone.effect_index = reset_bones[bone.effect_index]['index']
-                else:
-                    bone.effect_index = -1
+        #     if bone.getExternalRotationFlag() or bone.getExternalTranslationFlag():
+        #         if bone.effect_index in reset_bones:
+        #             bone.effect_index = reset_bones[bone.effect_index]['index']
+        #         else:
+        #             bone.effect_index = -1
 
-            if bone.getIkFlag():
-                if bone.ik.target_index in reset_bones:
-                    bone.ik.target_index = reset_bones[bone.ik.target_index]['index']
-                    for link in bone.ik.link:
-                        link.bone_index = reset_bones[link.bone_index]['index']
-                else:
-                    bone.ik.target_index = -1
-                    for link in bone.ik.link:
-                        link.bone_index = -1
+        #     if bone.getIkFlag():
+        #         if bone.ik.target_index in reset_bones:
+        #             bone.ik.target_index = reset_bones[bone.ik.target_index]['index']
+        #             for link in bone.ik.link:
+        #                 link.bone_index = reset_bones[link.bone_index]['index']
+        #         else:
+        #             bone.ik.target_index = -1
+        #             for link in bone.ik.link:
+        #                 link.bone_index = -1
 
-        for vidx, vertex in enumerate(model.vertex_dict.values()):
-            if type(vertex.deform) is Bdef1:
-                vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-            elif type(vertex.deform) is Bdef2:
-                vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-                vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
-            elif type(vertex.deform) is Bdef4:
-                vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-                vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
-                vertex.deform.index2 = reset_bones[vertex.deform.index2]['index'] if vertex.deform.index2 in reset_bones else -1
-                vertex.deform.index3 = reset_bones[vertex.deform.index3]['index'] if vertex.deform.index3 in reset_bones else -1
-            elif type(vertex.deform) is Sdef:
-                vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-                vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
+        # for vidx, vertex in enumerate(model.vertex_dict.values()):
+        #     if type(vertex.deform) is Bdef1:
+        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
+        #     elif type(vertex.deform) is Bdef2:
+        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
+        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
+        #     elif type(vertex.deform) is Bdef4:
+        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
+        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
+        #         vertex.deform.index2 = reset_bones[vertex.deform.index2]['index'] if vertex.deform.index2 in reset_bones else -1
+        #         vertex.deform.index3 = reset_bones[vertex.deform.index3]['index'] if vertex.deform.index3 in reset_bones else -1
+        #     elif type(vertex.deform) is Sdef:
+        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
+        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
 
         logger.info("-- ボーンデータ調整終了")
 
@@ -1211,17 +1162,55 @@ class VroidExportService():
             model.display_slots["その他"] = DisplaySlot("その他", "Other", 0, 0)
 
         # 人体以外のボーン
+        hair_blocks = []
+        other_blocks = []
         for nidx, node_param in node_dict.items():
             if node_param['name'] not in bone_name_dict:
                 bone = Bone(node_param['name'], node_param['name'], node_param['position'], -1, 0, 0x0002)
                 parent_index = bone_name_dict[node_dict[node_param['parent']]['name']]['index'] if node_param['parent'] in node_dict and node_dict[node_param['parent']]['name'] in bone_name_dict else -1   # noqa
                 bone.parent_index = parent_index
                 bone.index = len(model.bones)
+                
+                if node_param['name'] not in DISABLE_BONES:
+                    node_names = node_param['name'].split('_') if "Hair" in node_param['name'] else node_param['name'].split('_J_')
+                    bone_block = None
+                    bone_name = None
+
+                    if "Hair" in node_param['name']:
+                        if len(hair_blocks) == 0:
+                            bone_block = {"bone_block_name": "髪", "bone_block_size": 1, "size": 1}
+                        else:
+                            bone_block = {"bone_block_name": "髪", "bone_block_size": hair_blocks[-1]["bone_block_size"], "size": hair_blocks[-1]["size"] + 1}
+                        hair_blocks.append(bone_block)
+                    else:
+                        if len(other_blocks) == 0:
+                            bone_block = {"bone_block_name": "装飾", "bone_block_size": 1, "size": 1}
+                        else:
+                            bone_block = {"bone_block_name": "装飾", "bone_block_size": other_blocks[-1]["bone_block_size"], "size": other_blocks[-1]["size"] + 1}
+                        other_blocks.append(bone_block)
+                    bone_name = f'{bone_block["bone_block_name"]}_{bone_block["bone_block_size"]:02d}-{bone_block["size"]:02d}'
+
+                    if "Hair" not in node_param['name'] and len(node_names) > 1:
+                        # 装飾の場合、末尾を入れる
+                        bone_name += node_param['name'][len(node_names[0]):]
+
+                    bone.name = bone_name
+
                 model.bones[bone.name] = bone
                 bone_name_dict[node_param['name']] = {'index': bone.index, 'name': bone.name, 'node_name': node_param['name'], 'node_index': node_name_dict[node_param['name']]}
 
-        # 表示先・ローカル軸・IK設定
+                if node_param['name'] not in DISABLE_BONES:
+                    if len(node_param['children']) == 0:
+                        # 末端の場合次ボーンで段を変える(加算用にsizeは0)
+                        if "Hair" in node_param['name']:
+                            hair_blocks.append({"bone_block_name": "髪", "bone_block_size": hair_blocks[-1]["bone_block_size"] + 1, "size": 0})
+                        else:
+                            other_blocks.append({"bone_block_name": "装飾", "bone_block_size": other_blocks[-1]["bone_block_size"] + 1, "size": 0})
+
+        # ローカル軸・IK設定
         for bone in model.bones.values():
+            model.bone_indexes[bone.index] = bone.name
+
             # 人体ボーン
             if bone.english_name in BONE_PAIRS:
                 # 表示先
@@ -1255,16 +1244,21 @@ class VroidExportService():
                     toe_ik_link.append(IkLink(model.bones[ankle_name].index, 0))
                     toe_ik = Ik(model.bones[toe_name].index, 40, 1, toe_ik_link)
                     bone.ik = toe_ik
+
+                if bone.name in ['右目', '左目'] and '両目' in model.bones:
+                    bone.flag |= 0x0100
+                    bone.effect_index = model.bones['両目'].index
+                    bone.effect_factor = 0.3
             else:
                 # 人体以外
                 # 表示先
-                node_param = node_dict[node_name_dict[bone.name]]
+                node_param = node_dict[node_name_dict[bone.english_name]]
                 tail_index = bone_name_dict[node_dict[node_param['children'][0]]['name']]['index'] if node_param['children'] and node_param['children'][0] in node_dict and node_dict[node_param['children'][0]]['name'] in bone_name_dict else -1   # noqa
                 if tail_index >= 0:
                     bone.tail_index = tail_index
                     bone.flag |= 0x0001 | 0x0008 | 0x0010
 
-                if "Hair" in bone.name:
+                if "Hair" in bone.english_name:
                     if bone.tail_index >= 0:
                         model.display_slots["髪"].references.append((0, bone.index))
                 else:
@@ -1548,7 +1542,7 @@ def calc_ratio(ratio: float, oldmin: float, oldmax: float, newmin: float, newmax
     return (((ratio - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin
 
 
-DELETE_BONES = [
+DISABLE_BONES = [
     'Face',
     'Body',
     'Hairs',

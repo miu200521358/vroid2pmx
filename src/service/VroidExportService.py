@@ -11,7 +11,7 @@ import shutil
 import numpy as np
 import re
 import math
-import _pickle as cPickle
+# import _pickle as cPickle
 
 from module.MOptions import MExportOptions
 from mmd.PmxData import PmxModel, Vertex, Material, Bone, Morph, DisplaySlot, RigidBody, Joint, Bdef1, Bdef2, Bdef4, Sdef, RigidBodyParam, IkLink, Ik, BoneMorphData # noqa
@@ -313,7 +313,7 @@ class VroidExportService():
             model.bones[bone_name].position = bone_vec
 
         local_y_vector = MVector3D(0, -1, 0)
-        local_z_vector = MVector3D(0, 0, -1)
+        # local_z_vector = MVector3D(0, 0, -1)
         for bone_name, bone_mat in trans_bone_mats.items():
             bone = model.bones[bone_name]
             direction = bone.name[0]
@@ -453,14 +453,26 @@ class VroidExportService():
                     morph.offsets = target_offset
 
                     model.org_morphs[morph_pair["name"]] = morph
+                    model.display_slots["表情"].references.append((1, morph.index))
             else:
                 if morph_name in model.org_morphs:
-                    morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
-                    morph.index = len(model.org_morphs)
-                    ratio = 0.7 if morph_pair["panel"] == MORPH_LIP else 1
-                    morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, ratio))
+                    if morph_pair["panel"] == MORPH_LIP:
+                        # 元モーフの名前を変更
+                        model.org_morphs[morph_name].name = f'{morph_pair["name"]}(1)'
 
-                    model.org_morphs[morph_pair["name"]] = morph
+                        # リップモーフは0.7倍にするため、グループモーフにする
+                        morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
+                        morph.index = len(model.org_morphs)
+                        ratio = 0.7
+                        morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, ratio))
+
+                        model.org_morphs[morph_pair["name"]] = morph
+                    else:
+                        # それ以外は名前のみ置換
+                        morph = model.org_morphs[morph_name]
+                        morph.name = morph_pair["name"]
+                        morph.panel = morph_pair["panel"]
+                    
                     model.display_slots["表情"].references.append((1, morph.index))
 
         logger.info('-- グループモーフデータ解析')
@@ -1821,9 +1833,9 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close": {"name": "まばたき", "panel": MORPH_EYE},
     "Fcl_EYE_Close_R": {"name": "まばたき右", "panel": MORPH_EYE},
     "Fcl_EYE_Close_L": {"name": "まばたき左", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy": {"name": "笑い", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
-    "EYE_Laugh": {"name": "笑い", "panel": MORPH_EYE, "binds": ["ウィンク", "ウィンク右"]},
     "Fcl_EYE_Fun": {"name": "喜び", "panel": MORPH_EYE},
     "Fcl_EYE_Fun_R": {"name": "喜び右", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun_L": {"name": "喜び左", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
@@ -1942,7 +1954,11 @@ MORPH_PAIRS = {
     "Fcl_MTH_SkinFung_R": {"name": "肌牙右", "panel": MORPH_LIP},
     "Fcl_HA_Fung1": {"name": "牙", "panel": MORPH_LIP},
     "Fcl_HA_Fung1_Up": {"name": "牙上", "panel": MORPH_LIP},
+    "Fcl_HA_Fung1_Up_R": {"name": "牙上右", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Up"},
+    "Fcl_HA_Fung1_Up_L": {"name": "牙上左", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Up"},
     "Fcl_HA_Fung1_Low": {"name": "牙下", "panel": MORPH_LIP},
+    "Fcl_HA_Fung1_Low_R": {"name": "牙下右", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Low"},
+    "Fcl_HA_Fung1_Low_L": {"name": "牙下左", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Low"},
     "Fcl_HA_Fung2": {"name": "ギザ歯", "panel": MORPH_LIP},
     "Fcl_HA_Fung2_Up": {"name": "ギザ歯上", "panel": MORPH_LIP},
     "Fcl_HA_Fung2_Low": {"name": "ギザ歯下", "panel": MORPH_LIP},

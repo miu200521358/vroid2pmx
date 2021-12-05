@@ -424,47 +424,49 @@ class VroidExportService():
         # 自前グループモーフ
         for sidx, (morph_name, morph_pair) in enumerate(MORPH_PAIRS.items()):
             if "binds" in morph_pair:
+                # 統合グループモーフ（ある場合だけ）
                 morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 0)
                 morph.index = len(model.org_morphs)
                 for bind_name in morph_pair["binds"]:
                     if bind_name in model.org_morphs:
                         bind_morph = model.org_morphs[bind_name]
-                        for group_morph in bind_morph.offsets:
-                            morph.offsets.append(GroupMorphData(group_morph.morph_index, group_morph.value))
-                model.org_morphs[morph_pair["name"]] = morph
-                model.display_slots["表情"].references.append((1, morph.index))
-            elif "split" in morph_pair:
-                # 元のモーフを左右に分割する
-                org_morph = model.org_morphs[morph_pair["split"]]
-                target_offset = []
-                if org_morph.morph_type == 1:
-                    for offset in org_morph.offsets:
-                        vertex = model.vertex_dict[offset.vertex_index]
-                        if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0):
-                            if morph_pair["panel"] == MORPH_LIP:
-                                # リップは中央にいくに従ってオフセットを弱める(最大値は0.7)
-                                ratio = 1 if abs(vertex.position.x()) >= 0.2 else calc_ratio(abs(vertex.position.x()), 0, 0.2, 0, 0.7)
-                                target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
-                            else:
-                                target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset.copy()))
-                if target_offset:
-                    morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
-                    morph.index = len(model.org_morphs)
-                    morph.offsets = target_offset
-
+                        morph.offsets.append(GroupMorphData(bind_morph.index, 1))
+                if len(morph.offsets) > 0:
                     model.org_morphs[morph_pair["name"]] = morph
                     model.display_slots["表情"].references.append((1, morph.index))
+            elif "split" in morph_pair:
+                if morph_pair["split"] in model.org_morphs:
+                    # 元のモーフを左右に分割する
+                    org_morph = model.org_morphs[morph_pair["split"]]
+                    target_offset = []
+                    if org_morph.morph_type == 1:
+                        for offset in org_morph.offsets:
+                            vertex = model.vertex_dict[offset.vertex_index]
+                            if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0):
+                                if morph_pair["panel"] == MORPH_LIP:
+                                    # リップは中央にいくに従ってオフセットを弱める(最大値は0.7)
+                                    ratio = 1 if abs(vertex.position.x()) >= 0.2 else calc_ratio(abs(vertex.position.x()), 0, 0.2, 0, 0.7)
+                                    target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
+                                else:
+                                    target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset.copy()))
+                    if target_offset:
+                        morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
+                        morph.index = len(model.org_morphs)
+                        morph.offsets = target_offset
+
+                        model.org_morphs[morph_pair["name"]] = morph
+                        model.display_slots["表情"].references.append((1, morph.index))
             else:
                 if morph_name in model.org_morphs:
-                    if morph_pair["panel"] == MORPH_LIP:
+                    if morph_pair["panel"] == MORPH_LIP and morph_pair["ratio"] != 1:
+                        # リップで倍率縮小
                         # 元モーフの名前を変更
                         model.org_morphs[morph_name].name = f'{morph_pair["name"]}(1)'
 
                         # リップモーフは0.7倍にするため、グループモーフにする
                         morph = Morph(morph_pair["name"], morph_pair["name"], morph_pair["panel"], 0)
                         morph.index = len(model.org_morphs)
-                        ratio = 0.7
-                        morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, ratio))
+                        morph.offsets.append(GroupMorphData(model.org_morphs[morph_name].index, morph_pair["ratio"]))
 
                         model.org_morphs[morph_pair["name"]] = morph
                     else:
@@ -1317,13 +1319,20 @@ class VroidExportService():
                 logger.error("出力ソフト情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
                 return None, None
 
-            if "VRoid Studio-1.0." not in model.json_data['extensions']['VRM']['exporterVersion']:
-                logger.error("VRoid Studio 1.0.x で出力されたvrmデータではないため、処理を中断します。\n出力元: %s", model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
-                return None, None
-
             if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'meta' not in model.json_data['extensions']['VRM']:
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
                 return None, None
+
+            if "VRoidStudio-0." in model.json_data['extensions']['VRM']['exporterVersion']:
+                # VRoid Studioベータ版はNG
+                logger.error("VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s", \
+                             model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
+                return None, None
+
+            if "VRoid Studio-1.0." not in model.json_data['extensions']['VRM']['exporterVersion']:
+                # VRoid Studio正式版じゃなくても警告だけに留める
+                logger.warning("VRoid Studio 1.0.x で出力されたvrmデータではないため、結果がおかしくなる可能性があります。\n（結果がおかしくてもサポート対象外となります）\n出力元: %s", \
+                               model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
 
             if 'title' in model.json_data['extensions']['VRM']['meta']:
                 model.name = model.json_data['extensions']['VRM']['meta']['title']
@@ -1821,13 +1830,15 @@ MORPH_PAIRS = {
     "Fcl_BRW_Surprised": {"name": "驚き", "panel": MORPH_EYEBROW},
     "Fcl_BRW_Surprised_R": {"name": "驚き右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
     "Fcl_BRW_Surprised_L": {"name": "驚き左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
-    # "": {"name": "きょとん", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉下左", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉下右", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉下", "panel": MORPH_EYEBROW, "binds": ["眉下左", "眉下右"]},
-    # "": {"name": "眉はんっ左", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉はんっ右", "panel": MORPH_EYEBROW},
-    # "": {"name": "眉はんっ", "panel": MORPH_EYEBROW, "binds": ["はんっ左", "はんっ右"]},
+    "browInnerUp": {"name": "ひそめる", "panel": MORPH_EYEBROW},
+    "browInnerUp_R": {"name": "ひそめる右", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
+    "browInnerUp_L": {"name": "ひそめる左", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
+    "browDown": {"name": "真面目", "panel": MORPH_EYEBROW, "binds": ["browDownRight", "browDownLeft"]},
+    "browDownRight": {"name": "真面目右", "panel": MORPH_EYEBROW},
+    "browDownLeft": {"name": "真面目左", "panel": MORPH_EYEBROW},
+    "browOuter": {"name": "はんっ", "panel": MORPH_EYEBROW, "binds": ["browOuterUpRight", "browOuterUpLeft"]},
+    "browOuterUpRight": {"name": "はんっ右", "panel": MORPH_EYEBROW},
+    "browOuterUpLeft": {"name": "はんっ左", "panel": MORPH_EYEBROW},
 
     "Fcl_EYE_Natural": {"name": "ナチュラル", "panel": MORPH_EYE},
     "Fcl_EYE_Close": {"name": "まばたき", "panel": MORPH_EYE},
@@ -1839,9 +1850,15 @@ MORPH_PAIRS = {
     "Fcl_EYE_Fun": {"name": "喜び", "panel": MORPH_EYE},
     "Fcl_EYE_Fun_R": {"name": "喜び右", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun_L": {"name": "喜び左", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
+    "eyeSquint": {"name": "にんまり", "panel": MORPH_EYE, "binds": ["eyeSquintRight", "eyeSquintLeft"]},
+    "eyeSquintRight": {"name": "にんまり右", "panel": MORPH_EYE},
+    "eyeSquintLeft": {"name": "にんまり左", "panel": MORPH_EYE},
     "Fcl_EYE_Angry": {"name": "キリッ", "panel": MORPH_EYE},
     "Fcl_EYE_Angry_R": {"name": "キリッ右", "panel": MORPH_EYE, "split": "Fcl_EYE_Angry"},
     "Fcl_EYE_Angry_L": {"name": "キリッ左", "panel": MORPH_EYE, "split": "Fcl_EYE_Angry"},
+    "noseSneer": {"name": "キリッ2", "panel": MORPH_EYE, "binds": ["noseSneerRight", "noseSneerLeft"]},
+    "noseSneerRight": {"name": "キリッ2右", "panel": MORPH_EYE},
+    "noseSneerLeft": {"name": "キリッ2左", "panel": MORPH_EYE},
     "Fcl_EYE_Sorrow": {"name": "じと目", "panel": MORPH_EYE},
     "Fcl_EYE_Sorrow_R": {"name": "じと目右", "panel": MORPH_EYE, "split": "Fcl_EYE_Sorrow"},
     "Fcl_EYE_Sorrow_L": {"name": "じと目左", "panel": MORPH_EYE, "split": "Fcl_EYE_Sorrow"},
@@ -1851,124 +1868,126 @@ MORPH_PAIRS = {
     "Fcl_EYE_Surprised": {"name": "びっくり", "panel": MORPH_EYE},
     "Fcl_EYE_Surprised_R": {"name": "びっくり右", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
     "Fcl_EYE_Surprised_L": {"name": "びっくり左", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
+    "eyeWide": {"name": "びっくり2", "panel": MORPH_EYE, "binds": ["eyeSquintRight", "eyeSquintLeft"]},
+    "eyeWideRight": {"name": "びっくり2右", "panel": MORPH_EYE},
+    "eyeWideLeft": {"name": "びっくり2左", "panel": MORPH_EYE},
+
+    "eyeLookUp": {"name": "目上", "panel": MORPH_EYE, "binds": ["eyeLookUpRight", "eyeLookUpLeft"]},
+    "eyeLookUpRight": {"name": "目上右", "panel": MORPH_EYE},
+    "eyeLookUpLeft": {"name": "目上左", "panel": MORPH_EYE},
+    "eyeLookDown": {"name": "目下", "panel": MORPH_EYE, "binds": ["eyeLookDownRight", "eyeLookDownLeft"]},
+    "eyeLookDownRight": {"name": "目下右", "panel": MORPH_EYE},
+    "eyeLookDownLeft": {"name": "目下左", "panel": MORPH_EYE},
+    "eyeLookIn": {"name": "目頭広", "panel": MORPH_EYE, "binds": ["eyeLookInRight", "eyeLookInLeft"]},
+    "eyeLookInRight": {"name": "目頭広右", "panel": MORPH_EYE},
+    "eyeLookInLeft": {"name": "目頭広左", "panel": MORPH_EYE},
+    "eyeLookOut": {"name": "目尻広", "panel": MORPH_EYE, "binds": ["eyeLookOutRight", "eyeLookOutLeft"]},
+    "eyeLookOutLeft": {"name": "目尻広右", "panel": MORPH_EYE},
+    "eyeLookOutRight": {"name": "目尻広左", "panel": MORPH_EYE},
+    # "eyeBlinkLeft": {"name": "", "panel": MORPH_EYE},
+    # "eyeBlinkRight": {"name": "", "panel": MORPH_EYE},
+    "_eyeIrisMoveBack": {"name": "瞳小", "panel": MORPH_EYE, "binds": ["_eyeIrisMoveBack_R", "_eyeIrisMoveBack_L"]},
+    "_eyeIrisMoveBack_R": {"name": "瞳小右", "panel": MORPH_EYE},
+    "_eyeIrisMoveBack_L": {"name": "瞳小左", "panel": MORPH_EYE},
+    "_eyeSquint+LowerUp": {"name": "下瞼上げ", "panel": MORPH_EYE, "binds": ["_eyeSquint+LowerUp_R", "_eyeSquint+LowerUp_L"]},
+    "_eyeSquint+LowerUp_R": {"name": "下瞼上げ右", "panel": MORPH_EYE},
+    "_eyeSquint+LowerUp_L": {"name": "下瞼上げ左", "panel": MORPH_EYE},
+
     "Fcl_EYE_Iris_Hide": {"name": "白目", "panel": MORPH_EYE},
     "Fcl_EYE_Iris_Hide_R": {"name": "白目右", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
     "Fcl_EYE_Iris_Hide_L": {"name": "白目左", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
     "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
-    # "": {"name": "目上左", "panel": MORPH_EYE},
-    # "": {"name": "目上右", "panel": MORPH_EYE},
-    # "": {"name": "目上", "panel": MORPH_EYE, "binds": ["目上左", "目上右"]},
-    # "": {"name": "目下左", "panel": MORPH_EYE},
-    # "": {"name": "目下右", "panel": MORPH_EYE},
-    # "": {"name": "目下", "panel": MORPH_EYE, "binds": ["目下左", "目下右"]},
-    # "": {"name": "目頭広左", "panel": MORPH_EYE},
-    # "": {"name": "目頭広右", "panel": MORPH_EYE},
-    # "": {"name": "目頭広", "panel": MORPH_EYE, "binds": ["目頭広左", "目頭広右"]},
-    # "": {"name": "目尻広左", "panel": MORPH_EYE},
-    # "": {"name": "目尻広右", "panel": MORPH_EYE},
-    # "": {"name": "目尻広", "panel": MORPH_EYE, "binds": ["目尻広左", "目尻広右"]},
-    # "": {"name": "にんまり左", "panel": MORPH_EYE},
-    # "": {"name": "にんまり右", "panel": MORPH_EYE},
-    # "": {"name": "にんまり", "panel": MORPH_EYE, "binds": ["にんまり左", "にんまり右"]},
-    # "": {"name": "びっくり左", "panel": MORPH_EYE},
-    # "": {"name": "びっくり右", "panel": MORPH_EYE},
-    # "": {"name": "びっくり", "panel": MORPH_EYE, "binds": ["びっくり左", "びっくり右"]},
-    # "": {"name": "ムッ左", "panel": MORPH_EYE},
-    # "": {"name": "ムッ右", "panel": MORPH_EYE},
-    # "": {"name": "ムッ", "panel": MORPH_EYE, "binds": ["ムッ右", "ムッ左"]},
-    # "": {"name": "白目下左", "panel": MORPH_EYE},
-    # "": {"name": "白目下右", "panel": MORPH_EYE},
-    # "": {"name": "白目下", "panel": MORPH_EYE, "binds": ["白目下左", "白目下右"]},
-    # "": {"name": "＞＜", "panel": MORPH_EYE},
 
-    "Fcl_MTH_A": {"name": "あ", "panel": MORPH_LIP},
-    "Fcl_MTH_I": {"name": "い", "panel": MORPH_LIP},
-    "Fcl_MTH_U": {"name": "う", "panel": MORPH_LIP},
-    "Fcl_MTH_E": {"name": "え", "panel": MORPH_LIP},
-    "Fcl_MTH_O": {"name": "お", "panel": MORPH_LIP},
-    "Fcl_MTH_Neutral": {"name": "口閉じ", "panel": MORPH_LIP},
-    "Fcl_MTH_Up": {"name": "口上", "panel": MORPH_LIP},
-    "Fcl_MTH_Down": {"name": "口下", "panel": MORPH_LIP},
-    "Fcl_MTH_Angry": {"name": "む", "panel": MORPH_LIP},
-    "Fcl_MTH_Angry_R": {"name": "む右", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
-    "Fcl_MTH_Angry_L": {"name": "む左", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
-    "Fcl_MTH_Small": {"name": "すぼめる", "panel": MORPH_LIP},
-    "Fcl_MTH_Large": {"name": "いー", "panel": MORPH_LIP},
-    "Fcl_MTH_Fun": {"name": "にやり", "panel": MORPH_LIP},
-    "Fcl_MTH_Fun_R": {"name": "にやり右", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
-    "Fcl_MTH_Fun_L": {"name": "にやり左", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
-    "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
-    "Fcl_MTH_Sorrow": {"name": "△", "panel": MORPH_LIP},
-    "Fcl_MTH_Surprised": {"name": "わー", "panel": MORPH_LIP},
+    "Fcl_MTH_A": {"name": "あ", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_I": {"name": "い", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_U": {"name": "う", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_E": {"name": "え", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_O": {"name": "お", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Neutral": {"name": "口閉じ", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_MTH_Up": {"name": "口上", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_MTH_Down": {"name": "口下", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_MTH_Angry": {"name": "む", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Angry_R": {"name": "む右", "panel": MORPH_LIP, "ratio": 0.7, "split": "Fcl_MTH_Angry"},
+    "Fcl_MTH_Angry_L": {"name": "む左", "panel": MORPH_LIP, "ratio": 0.7, "split": "Fcl_MTH_Angry"},
+    "Fcl_MTH_Small": {"name": "すぼめる", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Large": {"name": "いー", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Fun": {"name": "にやり", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Fun_R": {"name": "にやり右", "panel": MORPH_LIP, "ratio": 0.7, "split": "Fcl_MTH_Fun"},
+    "Fcl_MTH_Fun_L": {"name": "にやり左", "panel": MORPH_LIP, "ratio": 0.7, "split": "Fcl_MTH_Fun"},
+    "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Sorrow": {"name": "△", "panel": MORPH_LIP, "ratio": 0.7},
+    "Fcl_MTH_Surprised": {"name": "わー", "panel": MORPH_LIP, "ratio": 0.7},
     
-    # "": {"name": "あはは", "panel": MORPH_LIP},
-    # "": {"name": "すぼめる", "panel": MORPH_LIP},
-    # "": {"name": "にやり左", "panel": MORPH_LIP},
-    # "": {"name": "にやり右", "panel": MORPH_LIP},
-    # "": {"name": "にやり", "panel": MORPH_LIP, "binds": ["にやり左", "にやり右"]},
-    # "": {"name": "上唇んむー", "panel": MORPH_LIP},
-    # "": {"name": "下唇んむー", "panel": MORPH_LIP},
-    # "": {"name": "んむー", "panel": MORPH_LIP, "binds": ["上唇んむー", "下唇んむー"]},
-    # "": {"name": "上唇にこり", "panel": MORPH_LIP},
-    # "": {"name": "下唇にこり", "panel": MORPH_LIP},
-    # "": {"name": "にこり", "panel": MORPH_LIP, "binds": ["上唇にこり", "下唇にこり"]},
-    # "": {"name": "にっこり左", "panel": MORPH_LIP},
-    # "": {"name": "にっこり右", "panel": MORPH_LIP},
-    # "": {"name": "にっこり", "panel": MORPH_LIP, "binds": ["にっこり右", "にっこり左"]},
-    # "": {"name": "むっ左", "panel": MORPH_LIP},
-    # "": {"name": "むっ右", "panel": MORPH_LIP},
-    # "": {"name": "むっ", "panel": MORPH_LIP, "binds": ["むっ左", "むっ右"]},
-    # "": {"name": "いー左", "panel": MORPH_LIP},
-    # "": {"name": "いー右", "panel": MORPH_LIP},
-    # "": {"name": "いー", "panel": MORPH_LIP, "binds": ["いー左", "いー右"]},
-    # "": {"name": "ちっ左", "panel": MORPH_LIP},
-    # "": {"name": "ちっ右", "panel": MORPH_LIP},
-    # "": {"name": "ちっ", "panel": MORPH_LIP, "binds": ["ちっ右", "ちっ左"]},
-    # "": {"name": "にこ左", "panel": MORPH_LIP},
-    # "": {"name": "にこ右", "panel": MORPH_LIP},
-    # "": {"name": "にこ", "panel": MORPH_LIP, "binds": ["にこ左", "にこ右"]},
-    # "": {"name": "にこり2左", "panel": MORPH_LIP},
-    # "": {"name": "にこり2右", "panel": MORPH_LIP},
-    # "": {"name": "にこり2", "panel": MORPH_LIP, "binds": ["にこり2左", "にこり2右"]},
-    # "": {"name": "むー左", "panel": MORPH_LIP},
-    # "": {"name": "むー右", "panel": MORPH_LIP},
-    # "": {"name": "むー", "panel": MORPH_LIP, "binds": ["むー右", "むー左"]},
-    # "": {"name": "舌", "panel": MORPH_LIP},
-    # "": {"name": "いいー左", "panel": MORPH_LIP},
-    # "": {"name": "いいー右", "panel": MORPH_LIP},
-    # "": {"name": "いいー", "panel": MORPH_LIP, "binds": ["いいー左", "いいー右"]},
-    # "": {"name": "突き出す", "panel": MORPH_LIP},
-    # "": {"name": "ぷくー", "panel": MORPH_LIP},
-    # "": {"name": "にやり左", "panel": MORPH_LIP},
-    # "": {"name": "にやり右", "panel": MORPH_LIP},
-    # "": {"name": "にやり", "panel": MORPH_LIP, "binds": ["にやり左", "にやり右"]},
-    # "": {"name": "顎開", "panel": MORPH_LIP},
-    # "": {"name": "顎前", "panel": MORPH_LIP},
-    # "": {"name": "顎左", "panel": MORPH_LIP},
-    # "": {"name": "顎右", "panel": MORPH_LIP},
+    "jawOpen": {"name": "あああ", "panel": MORPH_LIP, "ratio": 1},
+    "jawForward": {"name": "顎前", "panel": MORPH_LIP, "ratio": 1},
+    "jawLeft": {"name": "顎左", "panel": MORPH_LIP, "ratio": 1},
+    "jawRight": {"name": "顎右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthFunnel": {"name": "んむー", "panel": MORPH_LIP, "ratio": 1},
+    "mouthPucker": {"name": "うー", "panel": MORPH_LIP, "ratio": 1},
+    "mouthLeft": {"name": "口左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthRight": {"name": "口右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthRoll": {"name": "んむー", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthRollUpper", "mouthRollLower"]},
+    "mouthRollUpper": {"name": "上唇んむー", "panel": MORPH_LIP, "ratio": 1},
+    "mouthRollLower": {"name": "下唇んむー", "panel": MORPH_LIP, "ratio": 1},
+    "mouthShrug": {"name": "むむ", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthShrugUpper", "mouthShrugLower"]},
+    "mouthShrugUpper": {"name": "上唇むむ", "panel": MORPH_LIP, "ratio": 1},
+    "mouthShrugLower": {"name": "下唇むむ", "panel": MORPH_LIP, "ratio": 1},
+    # "mouthClose": {"name": "", "panel": MORPH_LIP, "ratio": 1},
+    "mouthDimple": {"name": "口幅広", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthDimpleRight", "mouthDimpleLeft"]},
+    "mouthDimpleRight": {"name": "口幅広右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthDimpleLeft": {"name": "口幅広左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthPress": {"name": "薄笑い", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthPressRight", "mouthPressLeft"]},
+    "mouthPressRight": {"name": "薄笑い右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthPressLeft": {"name": "薄笑い左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthSmile": {"name": "にやり2", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthSmileRight", "mouthSmileLeft"]},
+    "mouthSmileRight": {"name": "にやり2右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthSmileLeft": {"name": "にやり2左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthUpperUp": {"name": "にひ", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthUpperUpRight", "mouthDimpleLeft"]},
+    "mouthUpperUpRight": {"name": "にひ右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthUpperUpLeft": {"name": "にひ左", "panel": MORPH_LIP, "ratio": 1},
+    "cheekSquint": {"name": "にひひ", "panel": MORPH_LIP, "ratio": 1, "binds": ["cheekSquintRight", "cheekSquintLeft"]},
+    "cheekSquintRight": {"name": "にひひ右", "panel": MORPH_LIP, "ratio": 1},
+    "cheekSquintLeft": {"name": "にひひ左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthFrown": {"name": "ちっ", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthFrownRight", "mouthFrownLeft"]},
+    "mouthFrownRight": {"name": "ちっ右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthFrownLeft": {"name": "ちっ左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthLowerDown": {"name": "むっ", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthLowerDownRight", "mouthLowerDownLeft"]},
+    "mouthLowerDownRight": {"name": "むっ右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthLowerDownLeft": {"name": "むっ左", "panel": MORPH_LIP, "ratio": 1},
+    "mouthStretch": {"name": "ぎりっ", "panel": MORPH_LIP, "ratio": 1, "binds": ["mouthStretchRight", "mouthStretchLeft"]},
+    "mouthStretchRight": {"name": "ぎりっ右", "panel": MORPH_LIP, "ratio": 1},
+    "mouthStretchLeft": {"name": "ぎりっ左", "panel": MORPH_LIP, "ratio": 1},
+    "tongueOut": {"name": "べー", "panel": MORPH_LIP, "ratio": 1},
+    "_mouthFunnel+SharpenLips": {"name": "うほっ", "panel": MORPH_LIP, "ratio": 1},
+    "_mouthPress+CatMouth": {"name": "ω口", "panel": MORPH_LIP, "ratio": 1},
+    "_mouthPress+CatMouth-ex": {"name": "ω口2", "panel": MORPH_LIP, "ratio": 1},
+    "_mouthPress+DuckMouth": {"name": "ω口3", "panel": MORPH_LIP, "ratio": 1},
+    "cheekPuff": {"name": "ぷくー", "panel": MORPH_LIP, "ratio": 1},
+    "cheekPuff_R": {"name": "ぷくー右", "panel": MORPH_LIP, "ratio": 1, "split": "cheekPuff"},
+    "cheekPuff_L": {"name": "ぷくー左", "panel": MORPH_LIP, "ratio": 1, "split": "cheekPuff"},
 
-    "Fcl_MTH_SkinFung": {"name": "肌牙", "panel": MORPH_LIP},
-    "Fcl_MTH_SkinFung_L": {"name": "肌牙左", "panel": MORPH_LIP},
-    "Fcl_MTH_SkinFung_R": {"name": "肌牙右", "panel": MORPH_LIP},
-    "Fcl_HA_Fung1": {"name": "牙", "panel": MORPH_LIP},
-    "Fcl_HA_Fung1_Up": {"name": "牙上", "panel": MORPH_LIP},
-    "Fcl_HA_Fung1_Up_R": {"name": "牙上右", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Up"},
-    "Fcl_HA_Fung1_Up_L": {"name": "牙上左", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Up"},
-    "Fcl_HA_Fung1_Low": {"name": "牙下", "panel": MORPH_LIP},
-    "Fcl_HA_Fung1_Low_R": {"name": "牙下右", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Low"},
-    "Fcl_HA_Fung1_Low_L": {"name": "牙下左", "panel": MORPH_LIP, "split": "Fcl_HA_Fung1_Low"},
-    "Fcl_HA_Fung2": {"name": "ギザ歯", "panel": MORPH_LIP},
-    "Fcl_HA_Fung2_Up": {"name": "ギザ歯上", "panel": MORPH_LIP},
-    "Fcl_HA_Fung2_Low": {"name": "ギザ歯下", "panel": MORPH_LIP},
-    "Fcl_HA_Fung3": {"name": "真ん中牙", "panel": MORPH_LIP},
-    "Fcl_HA_Fung3_Up": {"name": "真ん中牙上", "panel": MORPH_LIP},
-    "Fcl_HA_Fung3_Low": {"name": "真ん中牙下", "panel": MORPH_LIP},
-    "Fcl_HA_Hide": {"name": "歯隠", "panel": MORPH_LIP},
-    "Fcl_HA_Short": {"name": "歯短", "panel": MORPH_LIP},
-    "Fcl_HA_Short_Up": {"name": "歯短上", "panel": MORPH_LIP},
-    "Fcl_HA_Short_Low": {"name": "歯短下", "panel": MORPH_LIP},
+    "Fcl_MTH_SkinFung": {"name": "肌牙", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_MTH_SkinFung_L": {"name": "肌牙左", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_MTH_SkinFung_R": {"name": "肌牙右", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung1": {"name": "牙", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung1_Up": {"name": "牙上", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung1_Up_R": {"name": "牙上右", "panel": MORPH_LIP, "ratio": 1, "split": "Fcl_HA_Fung1_Up"},
+    "Fcl_HA_Fung1_Up_L": {"name": "牙上左", "panel": MORPH_LIP, "ratio": 1, "split": "Fcl_HA_Fung1_Up"},
+    "Fcl_HA_Fung1_Low": {"name": "牙下", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung1_Low_R": {"name": "牙下右", "panel": MORPH_LIP, "ratio": 1, "split": "Fcl_HA_Fung1_Low"},
+    "Fcl_HA_Fung1_Low_L": {"name": "牙下左", "panel": MORPH_LIP, "ratio": 1, "split": "Fcl_HA_Fung1_Low"},
+    "Fcl_HA_Fung2": {"name": "ギザ歯", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung2_Up": {"name": "ギザ歯上", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung2_Low": {"name": "ギザ歯下", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung3": {"name": "真ん中牙", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung3_Up": {"name": "真ん中牙上", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Fung3_Low": {"name": "真ん中牙下", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Hide": {"name": "歯隠", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Short": {"name": "歯短", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Short_Up": {"name": "歯短上", "panel": MORPH_LIP, "ratio": 1},
+    "Fcl_HA_Short_Low": {"name": "歯短下", "panel": MORPH_LIP, "ratio": 1},
 
     "Fcl_ALL_Neutral": {"name": "ニュートラル", "panel": MORPH_OTHER},
     "Fcl_ALL_Angry": {"name": "怒", "panel": MORPH_OTHER},

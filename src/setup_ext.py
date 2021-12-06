@@ -10,7 +10,7 @@ def get_ext():
     ext = []
     sources = ["module\\MMath.pyx", "module\\MParams.pyx", \
                "utils\\MLogger.py", "utils\\MBezierUtils.pyx", "utils\\MServiceUtils.pyx", \
-               "mmd\\VmdData.pyx", "mmd\\VmdReader.py", "mmd\\PmxData.pyx", "mmd\\PmxReader.py"]
+               "mmd\\VmdData.pyx", "mmd\\VmdReader.py", "mmd\\PmxData.pyx", "mmd\\PmxReader.py", "mmd\\PmxWriter.py"]
     # for path in glob.glob("*/**/*.pyx", recursive=True):
     #     if os.path.isfile(path):
     #         print(path)

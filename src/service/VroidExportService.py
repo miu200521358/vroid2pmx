@@ -821,7 +821,9 @@ class VroidExportService():
                                 emissive_ary = np.array(vrm_material["emissiveFactor"])
                                 emissive_ary = np.append(emissive_ary, 1)
                             else:
-                                emissive_ary = np.array([0, 0, 0, 1])
+                                # なかった場合には仮に明るめの色を入れておく
+                                logger.warning("髪の反射色がVrmデータになかったため、仮に白色を差し込みます", decoration=MLogger.DECORATION_BOX)
+                                emissive_ary = np.array([0.9, 0.9, 0.9, 1])
                             emissive_img = Image.fromarray(np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8), mode='RGBA')
                             # 乗算
                             hair_emissive_img = ImageChops.multiply(spe_img, emissive_img)

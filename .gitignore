@@ -122,4 +122,4 @@ dmypy.json
 .pyre/
 
 history.json
-
+*.zip

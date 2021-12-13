@@ -366,4 +366,7 @@ def resource_path(relative):
 
 @cython.ccall
 def print_message(msg: str, target_level: int):
-    sys.stdout.write(msg + "\n", (target_level < MLogger.INFO))
+    try:
+        sys.stdout.write(msg + "\n", (target_level < MLogger.INFO))
+    except Exception:
+        print(msg)

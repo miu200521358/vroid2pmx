@@ -1331,9 +1331,9 @@ class VroidExportService():
                              model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
                 return None, None
 
-            if "VRoid Studio-1.0." not in model.json_data['extensions']['VRM']['exporterVersion']:
+            if "VRoid Studio-1." not in model.json_data['extensions']['VRM']['exporterVersion']:
                 # VRoid Studio正式版じゃなくても警告だけに留める
-                logger.warning("VRoid Studio 1.0.x で出力されたvrmデータではないため、結果がおかしくなる可能性があります。\n（結果がおかしくてもサポート対象外となります）\n出力元: %s", \
+                logger.warning("VRoid Studio 1.x で出力されたvrmデータではないため、結果がおかしくなる可能性があります。\n（結果がおかしくてもサポート対象外となります）\n出力元: %s", \
                                model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
 
             if 'title' in model.json_data['extensions']['VRM']['meta']:

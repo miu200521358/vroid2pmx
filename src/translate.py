@@ -37,6 +37,7 @@ if __name__ == "__main__":
                         if "text" in results:
                             v = results["text"]
                             v = v.replace("% s", " %s")
+                            v = v.replace("% S", " %s")
                             messages[k] = v
                             print(f"「{k}」 -> 「{v}」")
 

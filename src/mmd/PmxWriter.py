@@ -87,26 +87,28 @@ class PmxWriter:
                 # deform
                 if type(vertex.deform) is Bdef1:
                     fout.write(struct.pack(TYPE_BYTE, 0))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index0)))
+                    self.write_number(fout, bone_idx_type, vertex.deform.index0)
                 elif type(vertex.deform) is Bdef2:
                     fout.write(struct.pack(TYPE_BYTE, 1))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index0)))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index1)))
+                    self.write_number(fout, bone_idx_type, vertex.deform.index0)
+                    self.write_number(fout, bone_idx_type, vertex.deform.index1)
+
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight0, True)
                 elif type(vertex.deform) is Bdef4:
                     fout.write(struct.pack(TYPE_BYTE, 2))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index0)))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index1)))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index2)))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index3)))
+                    self.write_number(fout, bone_idx_type, vertex.deform.index0)
+                    self.write_number(fout, bone_idx_type, vertex.deform.index1)
+                    self.write_number(fout, bone_idx_type, vertex.deform.index2)
+                    self.write_number(fout, bone_idx_type, vertex.deform.index3)
+
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight0, True)
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight1, True)
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight2, True)
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight3, True)
                 elif type(vertex.deform) is Sdef:
                     fout.write(struct.pack(TYPE_BYTE, 3))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index0)))
-                    fout.write(struct.pack(bone_idx_type, int(vertex.deform.index1)))
+                    self.write_number(fout, bone_idx_type, vertex.deform.index0)
+                    self.write_number(fout, bone_idx_type, vertex.deform.index1)
                     self.write_number(fout, TYPE_FLOAT, vertex.deform.weight0, True)
                     self.write_number(fout, TYPE_FLOAT, float(vertex.deform.sdef_c.x()))
                     self.write_number(fout, TYPE_FLOAT, float(vertex.deform.sdef_c.y()))
@@ -506,7 +508,14 @@ class PmxWriter:
     def write_number(self, fout, val_type: str, val: float, is_positive_only=False):
         # 正常な値を強制設定
         val = max(0, get_effective_value(val)) if is_positive_only else get_effective_value(val)
-        # INT型の場合、INT変換
-        val = int(val) if val_type in [TYPE_INT, TYPE_UNSIGNED_INT] else float(val)
 
-        fout.write(struct.pack(val_type, val))
+        try:
+            # INT型の場合、INT変換
+            if val_type in [TYPE_FLOAT]:
+                fout.write(struct.pack(val_type, float(val)))
+            else:
+                fout.write(struct.pack(val_type, int(val)))
+        except Exception as e:
+            logger.error("val_type in [float]: %s", val_type in [TYPE_FLOAT])
+            logger.error("write_number失敗: type: %s, val: %s, int(val): %s", val_type, val, int(val))
+            raise e

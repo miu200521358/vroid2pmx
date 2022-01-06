@@ -273,21 +273,21 @@ class VroidExportService():
                                                            vertex.position - model.bones[model.bone_indexes[vertex.deform.index2]].position, \
                                                            vertex.position - model.bones[model.bone_indexes[vertex.deform.index3]].position]
 
-        trans_bone_vecs = {}
-        trans_bone_mats = {}
-        trans_vertex_vecs = {}
-        trans_normal_vecs = {}
+        for direction, astance_qq in [("右", MQuaternion.fromEulerAngles(0, 0, 35)), ("左", MQuaternion.fromEulerAngles(0, 0, -35))]:
+            trans_bone_vecs = {}
+            trans_bone_mats = {}
+            trans_vertex_vecs = {}
+            trans_normal_vecs = {}
 
-        trans_bone_mats["全ての親"] = MMatrix4x4()
-        trans_bone_mats["全ての親"].setToIdentity()
+            trans_bone_mats["全ての親"] = MMatrix4x4()
+            trans_bone_mats["全ての親"].setToIdentity()
 
-        for direction, edirection, astance_qq in [("右", '_R_', MQuaternion.fromEulerAngles(0, 0, 35)), ("左", '_L_', MQuaternion.fromEulerAngles(0, 0, -35))]:
             arm_bone_name = f'{direction}腕'
             bone_names = ['頭', f'{direction}親指先', f'{direction}人指先', f'{direction}中指先', f'{direction}薬指先', f'{direction}小指先', \
                           f'{direction}胸先', f'{direction}腕捩1', f'{direction}腕捩2', f'{direction}腕捩3', f'{direction}手捩1', f'{direction}手捩2', f'{direction}手捩3']
             
             for bname in model.bones.keys():
-                if '装飾_' in bname and '_end' in bname and edirection in bname:
+                if '装飾_' in bname:
                     bone_names.append(bname)
 
             for end_bone_name in bone_names:
@@ -308,80 +308,79 @@ class VroidExportService():
                     if bone_name not in trans_bone_vecs:
                         trans_bone_vecs[bone_name] = mat * MVector3D()
                         trans_bone_mats[bone_name] = mat.copy()
-        
-        for bone_name, bone_vec in trans_bone_vecs.items():
-            model.bones[bone_name].position = bone_vec
-
-        local_y_vector = MVector3D(0, -1, 0)
-        # local_z_vector = MVector3D(0, 0, -1)
-        for bone_name, bone_mat in trans_bone_mats.items():
-            bone = model.bones[bone_name]
-            direction = bone.name[0]
-            arm_bone_name = f'{direction}腕'
-            elbow_bone_name = f'{direction}ひじ'
-            wrist_bone_name = f'{direction}手首'
-            finger_bone_name = f'{direction}中指１'
             
-            # ローカル軸
-            if bone.name in ['右肩', '左肩'] and arm_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[arm_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右腕', '左腕'] and elbow_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右ひじ', '左ひじ'] and wrist_bone_name in model.bones:
-                # ローカルYで曲げる
-                bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(local_y_vector, bone.local_x_vector).normalized()
-            if bone.name in ['右手首', '左手首'] and finger_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[finger_bone_name].position - model.bones[bone.name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            # 捩り
-            if bone.name in ['右腕捩', '左腕捩'] and arm_bone_name in model.bones and elbow_bone_name in model.bones:
-                bone.fixed_axis = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
-                bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右手捩', '左手捩'] and elbow_bone_name in model.bones and wrist_bone_name in model.bones:
-                bone.fixed_axis = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
-                bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            # 指
-            if bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]['display'] and '指' in BONE_PAIRS[bone.english_name]['display']:
-                bone.local_x_vector = (model.bones[model.bone_indexes[bone.tail_index]].position - model.bones[model.bone_indexes[bone.parent_index]].position).normalized()    # noqa
-                bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+            for bone_name, bone_vec in trans_bone_vecs.items():
+                model.bones[bone_name].position = bone_vec
 
-        for vertex_idx, vertex_relative_poses in all_vertex_relative_poses.items():
-            if vertex_idx not in trans_vertex_vecs:
-                vertex = model.vertex_dict[vertex_idx]
-                if type(vertex.deform) is Bdef1 and model.bone_indexes[vertex.deform.index0] in trans_bone_mats:
-                    trans_vertex_vecs[vertex.index] = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
-                    trans_normal_vecs[vertex.index] = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                elif type(vertex.deform) is Bdef2 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats):
-                    v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
-                    v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
-                    trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * (1 - vertex.deform.weight0))
+            local_y_vector = MVector3D(0, -1, 0)
+            # local_z_vector = MVector3D(0, 0, -1)
+            for bone_name, bone_mat in trans_bone_mats.items():
+                bone = model.bones[bone_name]
+                arm_bone_name = f'{direction}腕'
+                elbow_bone_name = f'{direction}ひじ'
+                wrist_bone_name = f'{direction}手首'
+                finger_bone_name = f'{direction}中指１'
+                
+                # ローカル軸
+                if bone.name in ['右肩', '左肩'] and arm_bone_name in model.bones:
+                    bone.local_x_vector = (model.bones[arm_bone_name].position - model.bones[bone.name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+                if bone.name in ['右腕', '左腕'] and elbow_bone_name in model.bones:
+                    bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[bone.name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+                if bone.name in ['右ひじ', '左ひじ'] and wrist_bone_name in model.bones:
+                    # ローカルYで曲げる
+                    bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[bone.name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(local_y_vector, bone.local_x_vector).normalized()
+                if bone.name in ['右手首', '左手首'] and finger_bone_name in model.bones:
+                    bone.local_x_vector = (model.bones[finger_bone_name].position - model.bones[bone.name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+                # 捩り
+                if bone.name in ['右腕捩', '左腕捩'] and arm_bone_name in model.bones and elbow_bone_name in model.bones:
+                    bone.fixed_axis = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
+                    bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+                if bone.name in ['右手捩', '左手捩'] and elbow_bone_name in model.bones and wrist_bone_name in model.bones:
+                    bone.fixed_axis = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
+                    bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
+                # 指
+                if bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]['display'] and '指' in BONE_PAIRS[bone.english_name]['display']:
+                    bone.local_x_vector = (model.bones[model.bone_indexes[bone.tail_index]].position - model.bones[model.bone_indexes[bone.parent_index]].position).normalized()    # noqa
+                    bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
 
-                    v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                    v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
-                    trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * (1 - vertex.deform.weight0))
-                elif type(vertex.deform) is Bdef4 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats \
-                                                       and model.bone_indexes[vertex.deform.index2] in trans_bone_mats and model.bone_indexes[vertex.deform.index3] in trans_bone_mats):
-                    v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
-                    v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
-                    v2_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index2]] * vertex_relative_poses[2]
-                    v3_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index3]] * vertex_relative_poses[3]
-                    trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * vertex.deform.weight1) + (v2_vec * vertex.deform.weight2) + (v3_vec * vertex.deform.weight3)
+            for vertex_idx, vertex_relative_poses in all_vertex_relative_poses.items():
+                if vertex_idx not in trans_vertex_vecs:
+                    vertex = model.vertex_dict[vertex_idx]
+                    if type(vertex.deform) is Bdef1 and model.bone_indexes[vertex.deform.index0] in trans_bone_mats:
+                        trans_vertex_vecs[vertex.index] = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
+                        trans_normal_vecs[vertex.index] = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
+                    elif type(vertex.deform) is Bdef2 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats):
+                        v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
+                        v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
+                        trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * (1 - vertex.deform.weight0))
 
-                    v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                    v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
-                    v2_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index2]], vertex.normal)
-                    v3_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index3]], vertex.normal)
-                    trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * vertex.deform.weight1) + (v2_normal * vertex.deform.weight2) + (v3_normal * vertex.deform.weight3)     # noqa
+                        v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
+                        v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
+                        trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * (1 - vertex.deform.weight0))
+                    elif type(vertex.deform) is Bdef4 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats \
+                                                        and model.bone_indexes[vertex.deform.index2] in trans_bone_mats and model.bone_indexes[vertex.deform.index3] in trans_bone_mats):
+                        v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
+                        v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
+                        v2_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index2]] * vertex_relative_poses[2]
+                        v3_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index3]] * vertex_relative_poses[3]
+                        trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * vertex.deform.weight1) + (v2_vec * vertex.deform.weight2) + (v3_vec * vertex.deform.weight3)
 
-        for (vertex_idx, vertex_vec), (_, vertex_normal) in zip(trans_vertex_vecs.items(), trans_normal_vecs.items()):
-            model.vertex_dict[vertex_idx].position = vertex_vec
-            model.vertex_dict[vertex_idx].normal = vertex_normal.normalized()
-                    
+                        v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
+                        v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
+                        v2_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index2]], vertex.normal)
+                        v3_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index3]], vertex.normal)
+                        trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * vertex.deform.weight1) + (v2_normal * vertex.deform.weight2) + (v3_normal * vertex.deform.weight3)     # noqa
+
+            for (vertex_idx, vertex_vec), (_, vertex_normal) in zip(trans_vertex_vecs.items(), trans_normal_vecs.items()):
+                model.vertex_dict[vertex_idx].position = vertex_vec
+                model.vertex_dict[vertex_idx].normal = vertex_normal.normalized()
+                        
         logger.info("-- Aスタンス調整終了")
 
         return model
@@ -526,96 +525,20 @@ class VroidExportService():
         for knee_bone_name in ['左ひざ', '右ひざ', '左ひざD', '右ひざD']:
             if knee_bone_name in model.bones:
                 model.bones[knee_bone_name].position.setZ(model.bones[knee_bone_name].position.z() - 0.1)
-
-        # # 不要ボーンを削除
-        # for bone_name in DELETE_BONES:
-        #     if bone_name in model.bones:
-        #         del model.bones[bone_name]
         
-        # # ボーン名をキーにしているので一旦クリア
-        # org_bones = cPickle.loads(cPickle.dumps(model.bones, -1))
-        # model.bones = {}
+        # 体幹を中心に揃える
+        for trunk_bone_name in ["全ての親", "センター", "グルーブ", "腰", "下半身", "上半身", "上半身2", "上半身3", "首", "頭", "両目"]:
+            model.bones[trunk_bone_name].position.setX(0)
 
-        # reset_bones = {}
-        # for bidx, (bone_name, bone) in enumerate(org_bones.items()):
-        #     reset_bones[bone.index] = {'name': bone.name, 'index': bidx}
-        #     bone.index = bidx
-        #     model.bones[bone.name] = bone
-        #     model.bone_indexes[bidx] = bone.name
-
-        # for rigidbody in model.rigidbodies.values():
-        #     if rigidbody.bone_index in reset_bones:
-        #         rigidbody.bone_index = reset_bones[rigidbody.bone_index]['index']
-        #     else:
-        #         rigidbody.bone_index = -1
-
-        # for display_slot in model.display_slots.values():
-        #     new_references = []
-        #     for display_type, bone_idx in display_slot.references:
-        #         if display_type == 0:
-        #             if bone_idx in reset_bones:
-        #                 new_references.append((display_type, reset_bones[bone_idx]['index']))
-        #         else:
-        #             new_references.append((display_type, bone_idx))
-        #     display_slot.references = new_references
-
-        # for morph in model.org_morphs.values():
-        #     if morph.morph_type == 2:
-        #         new_offsets = []
-        #         for offset in morph.offsets:
-        #             if type(offset) is BoneMorphData:
-        #                 if offset.bone_index in reset_bones:
-        #                     offset.bone_index = reset_bones[offset.bone_index]['index']
-        #                     new_offsets.append(offset)
-        #                 else:
-        #                     offset.bone_index = -1
-        #                     new_offsets.append(offset)
-        #             else:
-        #                 new_offsets.append(offset)
-        #         morph.offsets = new_offsets
-
-        # for bidx, bone in enumerate(model.bones.values()):
-        #     if bone.parent_index in reset_bones:
-        #         bone.parent_index = reset_bones[bone.parent_index]['index']
-        #     else:
-        #         bone.parent_index = -1
-
-        #     if bone.getConnectionFlag():
-        #         if bone.tail_index in reset_bones:
-        #             bone.tail_index = reset_bones[bone.tail_index]['index']
-        #         else:
-        #             bone.tail_index = -1
-
-        #     if bone.getExternalRotationFlag() or bone.getExternalTranslationFlag():
-        #         if bone.effect_index in reset_bones:
-        #             bone.effect_index = reset_bones[bone.effect_index]['index']
-        #         else:
-        #             bone.effect_index = -1
-
-        #     if bone.getIkFlag():
-        #         if bone.ik.target_index in reset_bones:
-        #             bone.ik.target_index = reset_bones[bone.ik.target_index]['index']
-        #             for link in bone.ik.link:
-        #                 link.bone_index = reset_bones[link.bone_index]['index']
-        #         else:
-        #             bone.ik.target_index = -1
-        #             for link in bone.ik.link:
-        #                 link.bone_index = -1
-
-        # for vidx, vertex in enumerate(model.vertex_dict.values()):
-        #     if type(vertex.deform) is Bdef1:
-        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-        #     elif type(vertex.deform) is Bdef2:
-        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
-        #     elif type(vertex.deform) is Bdef4:
-        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
-        #         vertex.deform.index2 = reset_bones[vertex.deform.index2]['index'] if vertex.deform.index2 in reset_bones else -1
-        #         vertex.deform.index3 = reset_bones[vertex.deform.index3]['index'] if vertex.deform.index3 in reset_bones else -1
-        #     elif type(vertex.deform) is Sdef:
-        #         vertex.deform.index0 = reset_bones[vertex.deform.index0]['index'] if vertex.deform.index0 in reset_bones else -1
-        #         vertex.deform.index1 = reset_bones[vertex.deform.index1]['index'] if vertex.deform.index1 in reset_bones else -1
+        # 左右ボーンを線対称に揃える
+        for left_bone_name, left_bone in model.bones.items():
+            right_bone_name = f'右{left_bone_name[1:]}'
+            if '左' == left_bone_name[0] and right_bone_name in model.bones:
+                right_bone = model.bones[right_bone_name]
+                mean_position = MVector3D(np.mean([abs(left_bone.position.x()), abs(right_bone.position.x())]), \
+                                          np.mean([left_bone.position.y(), right_bone.position.y()]), np.mean([left_bone.position.z(), right_bone.position.z()]))
+                left_bone.position = MVector3D(mean_position.x() * np.sign(left_bone.position.x()), mean_position.y(), mean_position.z())
+                right_bone.position = MVector3D(mean_position.x() * np.sign(right_bone.position.x()), mean_position.y(), mean_position.z())
 
         logger.info("-- ボーンデータ調整終了")
 
@@ -634,7 +557,8 @@ class VroidExportService():
                 continue
             
             for pidx, primitive in enumerate(mesh["primitives"]):
-                if "attributes" not in primitive or "indices" not in primitive or "material" not in primitive:
+                if "attributes" not in primitive or "indices" not in primitive or "material" not in primitive or "JOINTS_0" not in primitive["attributes"] or "NORMAL" not in primitive["attributes"] \
+                   or "POSITION" not in primitive["attributes"] or "TEXCOORD_0" not in primitive["attributes"] or "WEIGHTS_0" not in primitive["attributes"]:
                     continue
                 
                 # 頂点ブロック

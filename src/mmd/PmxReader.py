@@ -2,6 +2,8 @@
 #
 import struct
 import hashlib
+import random
+import string
 
 from mmd.PmxData import PmxModel, Bone, RigidBody, Vertex, Material, Morph, DisplaySlot, RigidBody, Joint, Ik, IkLink, Bdef1, Bdef2, Bdef4, Sdef, Qdef, MaterialMorphData, UVMorphData, BoneMorphData, VertexMorphOffset, GroupMorphData # noqa
 from module.MMath import MRect, MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4 # noqa
@@ -362,8 +364,11 @@ class PmxReader:
                         # インデックス逆引きも登録
                         pmx.bone_indexes[bone.index] = bone.name
                     else:
-                        # 既に同じボーン名がある場合、処理がおかしくなるので中断
-                        raise SizingException("同名ボーンが重複しています。\nモデル: %s\n重複ボーン名: %s(%s - %s)" % (pmx.name, bone.name, pmx.bones[bone.name].index, bone_idx))
+                        # 既に同じボーン名がある場合、処理がおかしくなるので乱数追加
+                        logger.warning("ボーン名が重複しているため、後のボーンを無視します。\nモデル: %s\n重複ボーン名: %s(%s - %s)" % (pmx.name, bone.name, pmx.bones[bone.name].index, bone_idx), decoration=MLogger.DECORATION_BOX)     # noqa
+                        # 乱数追加してボーンリストにだけ追加
+                        pmx.bones[bone.name + randomname(3)] = bone
+                        # INDEX逆引きは登録しない（同名のを優先させる）
                 
                 if self.is_sizing:
                     # サイジング用ボーン ---------
@@ -1242,3 +1247,7 @@ class PmxReader:
             result = None
 
         return result
+
+
+def randomname(n) -> str:
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))

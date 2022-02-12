@@ -11,6 +11,9 @@ import shutil
 import numpy as np
 import re
 import math
+import random
+import string
+import copy
 # import _pickle as cPickle
 
 from module.MOptions import MExportOptions
@@ -50,7 +53,7 @@ class VroidExportService():
 
         try:
             service_data_txt = f"{logger.transtext('Vroid2Pmx処理実行')}\n------------------------\n{logger.transtext('exeバージョン')}: {self.options.version_name}\n"
-            service_data_txt = f"{service_data_txt}　{logger.transtext('元モデル')}: {os.path.basename(self.options.pmx_model.path)}\n"
+            service_data_txt = f"{service_data_txt}　{logger.transtext('元モデル')}: {os.path.basename(self.options.vrm_model.path)}\n"
 
             logger.info(service_data_txt, translate=False, decoration=MLogger.DECORATION_BOX)
 
@@ -222,7 +225,7 @@ class VroidExportService():
                         shape_size = MVector3D(diff_size[0] * 0.2, abs(axis_vec.y() * 0.8), diff_size[2])
                     else:
                         # 足の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.55, abs(axis_vec.y() * 1), diff_size[2])
+                        shape_size = MVector3D(diff_size[0] * 0.45, abs(axis_vec.y() * 1), diff_size[2])
 
                     center_vertex = bone.position + (tail_position - bone.position) / 2
 
@@ -440,10 +443,11 @@ class VroidExportService():
                 # 統合グループモーフ（ある場合だけ）
                 morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 0)
                 morph.index = len(model.org_morphs)
-                for bind_name in morph_pair["binds"]:
+                ratios = morph_pair['ratios'] if 'ratios' in morph_pair else [1 for _ in range(len(morph_pair["binds"]))]
+                for bind_name, bind_ratio in zip(morph_pair["binds"], ratios):
                     if bind_name in model.org_morphs:
                         bind_morph = model.org_morphs[bind_name]
-                        morph.offsets.append(GroupMorphData(bind_morph.index, 1))
+                        morph.offsets.append(GroupMorphData(bind_morph.index, bind_ratio))
                 if len(morph.offsets) > 0:
                     model.org_morphs[morph_pair["name"]] = morph
                     model.display_slots["表情"].references.append((1, morph.index))
@@ -462,6 +466,97 @@ class VroidExportService():
                                     target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
                                 else:
                                     target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset.copy()))
+                    if target_offset:
+                        morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
+                        morph.index = len(model.org_morphs)
+                        morph.offsets = target_offset
+
+                        model.org_morphs[morph_pair["name"]] = morph
+                        model.display_slots["表情"].references.append((1, morph.index))
+            elif "creates" in morph_pair:
+                # 生成タイプ
+                                
+                target_material_vertices = []
+                face_material_vertices = None
+                for mat_name, mat_vert in model.material_vertices.items():
+                    for create_mat_name in morph_pair['creates']:
+                        if create_mat_name in mat_name:
+                            target_material_vertices.extend(mat_vert)
+                    if '_Face_' in mat_name:
+                        face_material_vertices = mat_vert
+
+                if target_material_vertices and face_material_vertices:
+                    target_offset = []
+
+                    # 顔の頂点位置データ
+                    face_poses = []
+                    for vidx in face_material_vertices:
+                        vertex = model.vertex_dict[vidx]
+                        face_poses.append(vertex.position.data())
+
+                    if 'brow_' in morph_name:
+                        # 眉
+                        # デフォルトの移動量（とりあえず適当に）
+                        offset_distance = 0.2
+                        # 眉は目との距離
+                        eyeline_material_vertices = None
+                        for mat_name, mat_vert in model.material_vertices.items():
+                            if '_FaceEyeline_' in mat_name:
+                                eyeline_material_vertices = mat_vert
+                                break
+                        # 処理対象の位置データ
+                        target_poses = []
+                        for vidx in target_material_vertices:
+                            vertex = model.vertex_dict[vidx]
+                            target_poses.append(vertex.position.data())
+                        # 目の位置データ
+                        eyeline_poses = []
+                        if eyeline_material_vertices:
+                            for vidx in eyeline_material_vertices:
+                                vertex = model.vertex_dict[vidx]
+                                eyeline_poses.append(vertex.position.data())
+                            if target_poses and eyeline_poses:
+                                max_target_pos = np.max(target_poses, axis=0)
+                                max_eyeline_pos = np.max(eyeline_poses, axis=0)
+                                diff_pos = max_target_pos - max_eyeline_pos
+                                offset_distance = diff_pos[1] * 0.6
+
+                        for vidx in target_material_vertices:
+                            vertex = model.vertex_dict[vidx]
+                            if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0) or ("_R" != morph_name[-2:] and "_L" != morph_name[-2:]):
+                                if '_Below' in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, -offset_distance, 0))
+                                if '_Abobe' in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, offset_distance, 0))
+                                if '_Left' in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(-offset_distance, 0, 0))
+                                if '_Right' in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(offset_distance, 0, 0))
+                                if '_Front' in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, 0, -offset_distance))
+                                if '_Front' not in morph_name:
+                                    # 移動後の顔材質との距離を測る
+                                    face_distances = np.linalg.norm((np.array(face_poses) - (morph_offset.position_offset + vertex.position).data()), ord=2, axis=1)
+                                    # 近い顔頂点の位置
+                                    near_face_poses = np.array(face_poses)[np.argsort(face_distances)[:4]]
+                                    # Z方向の補正(一番手前っぽいのに合わせる)
+                                    morph_offset.position_offset.setZ((np.mean(near_face_poses, axis=0) - (morph_offset.position_offset + vertex.position).data())[2] - 0.01)
+                                target_offset.append(morph_offset)
+                    elif 'eye_Small' in morph_name:
+                        # 瞳小
+                        base_morph = model.org_morphs['びっくり右'] if 'eye_Small_R' == morph_name else model.org_morphs['びっくり左']
+                        for base_offset in base_morph.offsets:
+                            # びっくりの目部分だけ抜き出す
+                            if base_offset.vertex_index in target_material_vertices:
+                                target_offset.append(copy.deepcopy(base_offset))
+                    elif 'eye_Big' in morph_name:
+                        # 瞳大
+                        base_morph = model.org_morphs['びっくり右'] if 'eye_Big_R' == morph_name else model.org_morphs['びっくり左']
+                        for base_offset in base_morph.offsets:
+                            # びっくりの目部分だけ抜き出して大きさ反転
+                            if base_offset.vertex_index in target_material_vertices:
+                                target_offset.append(VertexMorphOffset(base_offset.vertex_index, base_offset.position_offset * -1))
+                       
                     if target_offset:
                         morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
                         morph.index = len(model.org_morphs)
@@ -825,7 +920,7 @@ class VroidExportService():
 
                 logger.info('-- 面・材質データ解析[%s-%s]', index_accessor, material_accessor)
         
-        # 材質を不透明(OPAQUE)→透明順(BLEND)に並べ替て設定
+        # 材質を不透明(OPAQUE)右透明順(BLEND)に並べ替て設定
         index_idx = 0
         for material_type in ["OPAQUE", "MASK", "BLEND", "FaceBrow", "Eyeline", "Eyelash", "EyeWhite", "EyeIris", "EyeHighlight", "Lens"]:
             if material_type in materials_by_type:
@@ -1238,7 +1333,7 @@ class VroidExportService():
         glft_dir_path = os.path.join(str(Path(self.options.output_path).resolve().parents[0]), "glTF")
         os.makedirs(glft_dir_path, exist_ok=True)
 
-        with open(self.options.pmx_model.path, "rb") as f:
+        with open(self.options.vrm_model.path, "rb") as f:
             self.buffer = f.read()
 
             signature = self.unpack(12, "12s")
@@ -1279,7 +1374,7 @@ class VroidExportService():
                 model.english_name = model.json_data['extensions']['VRM']['meta']['title']
             if not model.name:
                 # titleにモデル名が入ってなかった場合、ファイル名を代理入力
-                file_name = os.path.basename(self.options.pmx_model.path).split('.')[0]
+                file_name = os.path.basename(self.options.vrm_model.path).split('.')[0]
                 model.name = file_name
                 model.english_name = file_name
 
@@ -1501,6 +1596,10 @@ def calc_ratio(ratio: float, oldmin: float, oldmax: float, newmin: float, newmax
     # https://qastack.jp/programming/929103/convert-a-number-range-to-another-range-maintaining-ratio
     # NewValue = (((OldValue - OldMin) * (NewMax - NewMin)) / (OldMax - OldMin)) + NewMin
     return (((ratio - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin
+
+
+def randomname(n) -> str:
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
 
 
 DISABLE_BONES = [
@@ -1770,6 +1869,24 @@ MORPH_PAIRS = {
     "Fcl_BRW_Surprised": {"name": "驚き", "panel": MORPH_EYEBROW},
     "Fcl_BRW_Surprised_R": {"name": "驚き右", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
     "Fcl_BRW_Surprised_L": {"name": "驚き左", "panel": MORPH_EYEBROW, "split": "Fcl_BRW_Surprised"},
+    "brow_Below_R": {"name": "眉下右", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Below_L": {"name": "眉下左", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Below": {"name": "眉下", "panel": MORPH_EYEBROW, "binds": ["眉下右", "眉下左"]},
+    "brow_Abobe_R": {"name": "眉上右", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Abobe_L": {"name": "眉上左", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Abobe": {"name": "眉上", "panel": MORPH_EYEBROW, "binds": ["眉上右", "眉上左"]},
+    "brow_Left_R": {"name": "眉左右", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Left_L": {"name": "眉左左", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Left": {"name": "眉左", "panel": MORPH_EYEBROW, "binds": ["眉左右", "眉左左"]},
+    "brow_Right_R": {"name": "眉右右", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Right_L": {"name": "眉右左", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Right": {"name": "眉右", "panel": MORPH_EYEBROW, "binds": ["眉右右", "眉右左"]},
+    "brow_Front_R": {"name": "眉手前右", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Front_L": {"name": "眉手前左", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
+    "brow_Front": {"name": "眉手前", "panel": MORPH_EYEBROW, "binds": ["眉手前右", "眉手前左"]},
+    "brow_Serious_R": {"name": "真面目右", "panel": MORPH_EYEBROW, "binds": ["怒り右", "眉下右"], "ratios": [0.25, 0.7]},
+    "brow_Serious_L": {"name": "真面目左", "panel": MORPH_EYEBROW, "binds": ["怒り左", "眉下左"], "ratios": [0.25, 0.7]},
+    "brow_Serious": {"name": "真面目", "panel": MORPH_EYEBROW, "binds": ["怒り右", "眉下右", "怒り左", "眉下左"], "ratios": [0.25, 0.7, 0.25, 0.7]},
     "browInnerUp": {"name": "ひそめる", "panel": MORPH_EYEBROW},
     "browInnerUp_R": {"name": "ひそめる右", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
     "browInnerUp_L": {"name": "ひそめる左", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
@@ -1808,6 +1925,13 @@ MORPH_PAIRS = {
     "Fcl_EYE_Surprised": {"name": "びっくり", "panel": MORPH_EYE},
     "Fcl_EYE_Surprised_R": {"name": "びっくり右", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
     "Fcl_EYE_Surprised_L": {"name": "びっくり左", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
+    "eye_Small_R": {"name": "瞳小右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Small_L": {"name": "瞳小左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Small": {"name": "瞳小", "panel": MORPH_EYE, "binds": ["瞳小右", "瞳小左"]},
+    "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["瞳大右", "瞳大左"]},
+
     "eyeWide": {"name": "びっくり2", "panel": MORPH_EYE, "binds": ["eyeSquintRight", "eyeSquintLeft"]},
     "eyeWideRight": {"name": "びっくり2右", "panel": MORPH_EYE},
     "eyeWideLeft": {"name": "びっくり2左", "panel": MORPH_EYE},

@@ -18,11 +18,11 @@ import copy
 
 from module.MOptions import MExportOptions
 from mmd.PmxData import PmxModel, Vertex, Material, Bone, Morph, DisplaySlot, RigidBody, Joint, Bdef1, Bdef2, Bdef4, Sdef, RigidBodyParam, IkLink, Ik, BoneMorphData # noqa
-from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData # noqa
+from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData, MaterialMorphData # noqa
 from mmd.PmxWriter import PmxWriter
 from mmd.VmdData import VmdMotion, VmdBoneFrame, VmdCameraFrame, VmdInfoIk, VmdLightFrame, VmdMorphFrame, VmdShadowFrame, VmdShowIkFrame # noqa
 from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4 # noqa
-from utils import MServiceUtils
+from utils import MServiceUtils, MFileUtils
 from utils.MLogger import MLogger # noqa
 from utils.MException import SizingException, MKilledException
 
@@ -178,7 +178,7 @@ class VroidExportService():
                         elif '髪' in bone.name:
                             target_names = ['HAIR']
                             parent_bone_name = '頭'
-                            rigidbody_group = '5'
+                            rigidbody_group = '4'
                             hair_bones = {}
                             for bname in model.bones.keys():
                                 if '髪' in bname:
@@ -205,7 +205,7 @@ class VroidExportService():
                             target_names = ['CatEar']
                             parent_bone_name = '頭'
                             abb_names[logger.transtext("髪(ショート)")] = 'ネコ耳'
-                            rigidbody_group = '5'
+                            rigidbody_group = '4'
                             ear_bones = {}
                             for bname in model.bones.keys():
                                 if 'CatEar' in bname:
@@ -221,7 +221,7 @@ class VroidExportService():
                             target_names = ['RabbitEar']
                             parent_bone_name = '頭'
                             abb_names[logger.transtext("髪(ロング)")] = 'ウサ耳'
-                            rigidbody_group = '5'
+                            rigidbody_group = '4'
                             ear_bones = {}
                             for bname in model.bones.keys():
                                 if 'RabbitEar' in bname:
@@ -286,7 +286,7 @@ class VroidExportService():
                                 if primitive_target_bones[-1]:
                                     abb_name = abb_names[primitive_name]
                                     tailor_setting = {}
-                                    tailor_setting['material_name'] = target_material_name
+                                    tailor_setting['material_name'] = model.materials[target_material_name].name
                                     tailor_setting['parent_bone_name'] = parent_bone_name
                                     tailor_setting['abb_name'] = abb_name
                                     tailor_setting['group'] = rigidbody_group
@@ -745,6 +745,17 @@ class VroidExportService():
 
                         model.org_morphs[morph_pair["name"]] = morph
                         model.display_slots["表情"].references.append((1, morph.index))
+            elif 'material' in morph_pair:
+                # 材質モーフ
+                for material_index, material in enumerate(model.materials.values()):
+                    if morph_pair['material'] in model.textures[material.texture_index]:
+                        # 材質名が含まれている場合、対象
+                        morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
+                        morph.index = len(model.org_morphs)
+                        morph.offsets = [MaterialMorphData(material_index, 1, MVector4D(0, 0, 0, 1), MVector3D(), 0, MVector3D(), MVector4D(), 0, MVector4D(), MVector4D(), MVector4D())]
+
+                        model.org_morphs[morph_pair["name"]] = morph
+                        model.display_slots["表情"].references.append((1, morph.index))
             else:
                 if morph_name in model.org_morphs:
                     if morph_pair["panel"] == MORPH_LIP and morph_pair["ratio"] != 1:
@@ -1086,17 +1097,19 @@ class VroidExportService():
                         toon_sharing_flag = 1
                         toon_texture_index = 1
 
-                    material = Material(material_name, material_name, diffuse_color, alpha, specular_factor, specular_color, \
+                    material_name_ja = '_'.join([material_name.split('_')[-1], material_name.split('_')[-4]]) if '_HAIR_' in material_name else '_'.join(material_name.split('_')[-4:-2])
+                    # 材質日本語名は部分抽出
+                    material = Material(material_name_ja, material_name, diffuse_color, alpha, specular_factor, specular_color, \
                                         ambient_color, flag, edge_color, edge_size, texture_index, sphere_texture_index, sphere_mode, toon_sharing_flag, \
                                         toon_texture_index, "", 0)
-                    materials_by_type[material_key][material.name] = material
-                    indices_by_materials[material.name] = {}
+                    materials_by_type[material_key][material_name] = material
+                    indices_by_materials[material_name] = {}
                 else:
                     material = materials_by_type[material_key][material_name]
 
                 # 面データ ---------------
                 indices = self.read_from_accessor(model, index_accessor)
-                indices_by_materials[material.name][index_accessor] = (np.array(indices) + start_vidx).tolist()
+                indices_by_materials[material_name][index_accessor] = (np.array(indices) + start_vidx).tolist()
                 material.vertex_count += len(indices)
 
                 logger.info('-- 面・材質データ解析[%s-%s]', index_accessor, material_accessor)
@@ -1106,22 +1119,57 @@ class VroidExportService():
         for material_type in ["OPAQUE", "MASK", "BLEND", "FaceBrow", "Eyeline", "Eyelash", "EyeWhite", "EyeIris", "EyeHighlight", "Lens"]:
             if material_type in materials_by_type:
                 for material_name, material in materials_by_type[material_type].items():
-                    model.materials[material.name] = material
-                    model.material_vertices[material.name] = []
-                    for index_accessor, indices in indices_by_materials[material.name].items():
+                    model.materials[material_name] = material
+                    model.material_vertices[material_name] = []
+                    for index_accessor, indices in indices_by_materials[material_name].items():
                         for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
                             # 面の貼り方がPMXは逆
                             model.indices[index_idx] = [v2_idx, v1_idx, v0_idx]
                             index_idx += 1
 
-                            if v0_idx not in model.material_vertices[material.name]:
-                                model.material_vertices[material.name].append(v0_idx)
+                            if v0_idx not in model.material_vertices[material_name]:
+                                model.material_vertices[material_name].append(v0_idx)
 
-                            if v1_idx not in model.material_vertices[material.name]:
-                                model.material_vertices[material.name].append(v1_idx)
+                            if v1_idx not in model.material_vertices[material_name]:
+                                model.material_vertices[material_name].append(v1_idx)
 
-                            if v2_idx not in model.material_vertices[material.name]:
-                                model.material_vertices[material.name].append(v2_idx)
+                            if v2_idx not in model.material_vertices[material_name]:
+                                model.material_vertices[material_name].append(v2_idx)
+
+                    append_materials = None
+                    if material_type == "EyeIris":
+                        append_materials = [('eye_star', '星', 'Star'), ('eye_heart', 'ハート', 'Heart')]
+                    elif "_Face_" in material.english_name:
+                        append_materials = [('cheek_dye', '頬染め', 'Cheek_dye')]
+
+                    if append_materials:
+                        # 目材質追加
+                        for tex_name, mat_suffix, mat_suffix_english in append_materials:
+                            shutil.copy(MFileUtils.resource_path(f'src/resources/{tex_name}.png'), tex_dir_path)
+                            model.textures.append(os.path.join("tex", f'{tex_name}.png'))
+
+                            add_material = copy.deepcopy(material)
+                            add_material.name = f'{material.name}_{mat_suffix}'
+                            add_material.english_name = f'{material_name}_{mat_suffix_english}'
+                            add_material.texture_index = len(model.textures) - 1
+                            add_material.alpha = 0
+                            model.materials[add_material.name] = add_material
+                            model.material_vertices[add_material.name] = []
+
+                            for index_accessor, indices in indices_by_materials[material_name].items():
+                                for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                                    # 面の貼り方がPMXは逆
+                                    model.indices[index_idx] = [v2_idx, v1_idx, v0_idx]
+                                    index_idx += 1
+
+                                    if v0_idx not in model.material_vertices[add_material.name]:
+                                        model.material_vertices[add_material.name].append(v0_idx)
+
+                                    if v1_idx not in model.material_vertices[add_material.name]:
+                                        model.material_vertices[add_material.name].append(v1_idx)
+
+                                    if v2_idx not in model.material_vertices[add_material.name]:
+                                        model.material_vertices[add_material.name].append(v2_idx)
 
         logger.info("-- 頂点・面・材質データ解析終了")
 
@@ -1539,17 +1587,17 @@ class VroidExportService():
 
             if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'exporterVersion' not in model.json_data['extensions']['VRM']:
                 logger.error("出力ソフト情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None
+                return None, None, None
 
             if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'meta' not in model.json_data['extensions']['VRM']:
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None
+                return None, None, None
 
             if "VRoidStudio-0." in model.json_data['extensions']['VRM']['exporterVersion']:
                 # VRoid Studioベータ版はNG
                 logger.error("VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s", \
                              model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
-                return None, None
+                return None, None, None
 
             if "VRoid Studio-1." not in model.json_data['extensions']['VRM']['exporterVersion']:
                 # VRoid Studio正式版じゃなくても警告だけに留める
@@ -1610,7 +1658,7 @@ class VroidExportService():
 
             if "images" not in model.json_data:
                 logger.error("変換可能な画像情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None
+                return None, None, None
 
             # jsonデータの中に画像データの指定がある場合
             image_offset = 0
@@ -1815,9 +1863,9 @@ BONE_PAIRS = {
     'J_Bip_C_UpperChest': {'name': '上半身3', 'parent': 'J_Bip_C_Chest', 'tail': 'J_Bip_C_Neck', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
                            'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
     'J_Bip_C_Neck': {'name': '首', 'parent': 'J_Bip_C_UpperChest', 'tail': 'J_Bip_C_Head', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
+                     'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2, 3]},
     'J_Bip_C_Head': {'name': '頭', 'parent': 'J_Bip_C_Neck', 'tail': None, 'display': '体幹', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 0, 'rigidbodyShape': 0, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
+                     'rigidbodyGroup': 3, 'rigidbodyShape': 0, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2, 3]},
     'J_Adj_FaceEye': {'name': '両目', 'parent': 'J_Bip_C_Head', 'tail': None, 'display': '顔', 'flag': 0x0002 | 0x0008 | 0x0010, \
                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
     'J_Adj_L_FaceEye': {'name': '左目', 'parent': 'J_Bip_C_Head', 'tail': None, 'display': '顔', 'flag': 0x0002 | 0x0008 | 0x0010, \
@@ -2118,6 +2166,8 @@ MORPH_PAIRS = {
     "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["瞳大右", "瞳大左"]},
+    "eye_Star": {"name": "瞳星", "panel": MORPH_EYE, "material": "eye_star"},
+    "eye_Heart": {"name": "瞳ハート", "panel": MORPH_EYE, "material": "eye_heart"},
 
     "eyeWide": {"name": "びっくり2", "panel": MORPH_EYE, "binds": ["eyeSquintRight", "eyeSquintLeft"]},
     "eyeWideRight": {"name": "びっくり2右", "panel": MORPH_EYE},
@@ -2240,6 +2290,7 @@ MORPH_PAIRS = {
     "Fcl_HA_Short_Up": {"name": "歯短上", "panel": MORPH_LIP, "ratio": 1},
     "Fcl_HA_Short_Low": {"name": "歯短下", "panel": MORPH_LIP, "ratio": 1},
 
+    "Cheek_Dye": {"name": "頬染め", "panel": MORPH_OTHER, "material": "cheek_dye"},
     "Fcl_ALL_Neutral": {"name": "ニュートラル", "panel": MORPH_OTHER},
     "Fcl_ALL_Angry": {"name": "怒", "panel": MORPH_OTHER},
     "Fcl_ALL_Fun": {"name": "楽", "panel": MORPH_OTHER},

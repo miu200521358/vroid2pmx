@@ -291,8 +291,6 @@ cdef class Bone:
         self.display = False
         # サイジング用特殊ボーンであるか
         self.is_sizing = is_sizing
-        # 親ボーンから見た相対位置
-        self.relative_position = MVector3D()
 
         # 親ボーンからの長さ3D版(計算して求める）
         self.len_3d = MVector3D()

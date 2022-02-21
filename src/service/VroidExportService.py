@@ -1139,7 +1139,8 @@ class VroidExportService():
                         toon_sharing_flag = 1
                         toon_texture_index = 1
                     
-                    material_names = material_name.split('_')
+                    target_material_names = material_name.split(' ')
+                    material_names = target_material_names[0].split('_')
                     material_name_ja = '_'.join(material_names[-4:-2])
                     if material_names[-1].isdecimal():
                         # 末尾が数字である場合、末尾を入れる
@@ -1892,6 +1893,7 @@ def randomname(n) -> str:
 DISABLE_BONES = [
     'Face',
     'Body',
+    'Hair',
     'Hairs',
     'Hair001',
     'secondary',
@@ -2224,6 +2226,9 @@ MORPH_PAIRS = {
     "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["eye_Big_R", "eye_Big_L"]},
+    "eye_Nanu_R": {"name": "なぬ！右", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R"], "ratios": [1, 1]},
+    "eye_Nanu_L": {"name": "なぬ！左", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"], "ratios": [1, 1]},
+    "eye_Nanu": {"name": "なぬ！", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"], "ratios": [1, 1, 1, 1]},
     "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
     "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},
     "eye_Star": {"name": "星目", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Star_Material"]},

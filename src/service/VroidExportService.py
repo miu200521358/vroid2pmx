@@ -35,8 +35,8 @@ from mmd.PmxData import (
     IkLink,
     Ik,
     BoneMorphData,
-)  # noqa
-from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData, MaterialMorphData  # noqa
+)
+from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData, MaterialMorphData
 from mmd.PmxWriter import PmxWriter
 from mmd.VmdData import (
     VmdMotion,
@@ -47,10 +47,10 @@ from mmd.VmdData import (
     VmdMorphFrame,
     VmdShadowFrame,
     VmdShowIkFrame,
-)  # noqa
-from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4  # noqa
+)
+from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4
 from utils import MServiceUtils, MFileUtils
-from utils.MLogger import MLogger  # noqa
+from utils.MLogger import MLogger
 from utils.MException import SizingException, MKilledException
 
 logger = MLogger(__name__, level=1)
@@ -697,7 +697,7 @@ class VroidExportService:
                 bone.local_x_vector = (
                     model.bones[model.bone_indexes[bone.tail_index]].position
                     - model.bones[model.bone_indexes[bone.parent_index]].position
-                ).normalized()  # noqa
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
 
         for vertex_idx, vertex_relative_poses in all_vertex_relative_poses.items():
@@ -763,7 +763,7 @@ class VroidExportService:
                         + (v1_normal * vertex.deform.weight1)
                         + (v2_normal * vertex.deform.weight2)
                         + (v3_normal * vertex.deform.weight3)
-                    )  # noqa
+                    )
 
         for (vertex_idx, vertex_vec), (_, vertex_normal) in zip(trans_vertex_vecs.items(), trans_normal_vecs.items()):
             model.vertex_dict[vertex_idx].position = vertex_vec
@@ -1166,7 +1166,7 @@ class VroidExportService:
                     continue
 
                 # 頂点ブロック
-                vertex_key = f'{primitive["attributes"]["JOINTS_0"]}-{primitive["attributes"]["NORMAL"]}-{primitive["attributes"]["POSITION"]}-{primitive["attributes"]["TEXCOORD_0"]}-{primitive["attributes"]["WEIGHTS_0"]}'  # noqa
+                vertex_key = f'{primitive["attributes"]["JOINTS_0"]}-{primitive["attributes"]["NORMAL"]}-{primitive["attributes"]["POSITION"]}-{primitive["attributes"]["TEXCOORD_0"]}-{primitive["attributes"]["WEIGHTS_0"]}'
 
                 # 頂点データ
                 if vertex_key not in vertex_blocks:
@@ -1447,8 +1447,10 @@ class VroidExportService:
                         material_name_ja = "_".join([material_names[-5], material_names[-4], material_names[-1]])
                     if material_name_ja in registed_material_names:
                         logger.warning(
-                            "既に同じ材質名が登録されているため、元の材質名のまま登録します 変換材質名: %s 元材質名: %s", material_name_ja, material_name,
-                            decoration=MLogger.DECORATION_BOX
+                            "既に同じ材質名が登録されているため、元の材質名のまま登録します 変換材質名: %s 元材質名: %s",
+                            material_name_ja,
+                            material_name,
+                            decoration=MLogger.DECORATION_BOX,
                         )
                         material_name_ja = target_material_names[0]
 
@@ -1801,7 +1803,7 @@ class VroidExportService:
                             - node_dict[node_name_dict["J_Adj_L_FaceEye"]]["position"]
                         )
                         * 0.5
-                    )  # noqa
+                    )
                 elif "shoulderP_" in node_name:
                     position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Shoulder"]]["position"].copy()
                 elif "shoulderC_" in node_name:
@@ -1816,7 +1818,7 @@ class VroidExportService:
                             - node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperArm"]]["position"]
                         )
                         * factor
-                    )  # noqa
+                    )
                     if node_name[-2] in ["1", "2", "3"]:
                         bone.effect_index = bone_name_dict[f"arm_twist_{node_name[-1]}"]["index"]
                         bone.effect_factor = factor
@@ -1828,7 +1830,7 @@ class VroidExportService:
                             - node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_LowerArm"]]["position"]
                         )
                         * factor
-                    )  # noqa
+                    )
                     if node_name[-2] in ["1", "2", "3"]:
                         bone.effect_index = bone_name_dict[f"wrist_twist_{node_name[-1]}"]["index"]
                         bone.effect_factor = factor
@@ -2033,7 +2035,7 @@ class VroidExportService:
                     and node_param["children"][0] in node_dict
                     and node_dict[node_param["children"][0]]["name"] in bone_name_dict
                     else -1
-                )  # noqa
+                )
                 if tail_index >= 0:
                     bone.tail_index = tail_index
                     bone.flag |= 0x0001 | 0x0008 | 0x0010

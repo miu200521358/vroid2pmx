@@ -14,35 +14,62 @@ import math
 import random
 import string
 import copy
+
 # import _pickle as cPickle
 
 from module.MOptions import MExportOptions
-from mmd.PmxData import PmxModel, Vertex, Material, Bone, Morph, DisplaySlot, RigidBody, Joint, Bdef1, Bdef2, Bdef4, Sdef, RigidBodyParam, IkLink, Ik, BoneMorphData # noqa
-from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData, MaterialMorphData # noqa
+from mmd.PmxData import (
+    PmxModel,
+    Vertex,
+    Material,
+    Bone,
+    Morph,
+    DisplaySlot,
+    RigidBody,
+    Joint,
+    Bdef1,
+    Bdef2,
+    Bdef4,
+    Sdef,
+    RigidBodyParam,
+    IkLink,
+    Ik,
+    BoneMorphData,
+)  # noqa
+from mmd.PmxData import Bdef1, Bdef2, Bdef4, VertexMorphOffset, GroupMorphData, MaterialMorphData  # noqa
 from mmd.PmxWriter import PmxWriter
-from mmd.VmdData import VmdMotion, VmdBoneFrame, VmdCameraFrame, VmdInfoIk, VmdLightFrame, VmdMorphFrame, VmdShadowFrame, VmdShowIkFrame # noqa
-from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4 # noqa
+from mmd.VmdData import (
+    VmdMotion,
+    VmdBoneFrame,
+    VmdCameraFrame,
+    VmdInfoIk,
+    VmdLightFrame,
+    VmdMorphFrame,
+    VmdShadowFrame,
+    VmdShowIkFrame,
+)  # noqa
+from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4  # noqa
 from utils import MServiceUtils, MFileUtils
-from utils.MLogger import MLogger # noqa
+from utils.MLogger import MLogger  # noqa
 from utils.MException import SizingException, MKilledException
 
 logger = MLogger(__name__, level=1)
 
 MIME_TYPE = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/ktx': 'ktx',
-    'image/ktx2': 'ktx2',
-    'image/webp': 'webp',
-    'image/vnd-ms.dds': 'dds',
-    'audio/wav': 'wav'
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/ktx": "ktx",
+    "image/ktx2": "ktx2",
+    "image/webp": "webp",
+    "image/vnd-ms.dds": "dds",
+    "audio/wav": "wav",
 }
 
 # MMDにおける1cm＝0.125(ミクセル)、1m＝12.5
 MIKU_METER = 12.5
 
 
-class VroidExportService():
+class VroidExportService:
     def __init__(self, options: MExportOptions):
         self.options = options
         self.offset = 0
@@ -53,7 +80,9 @@ class VroidExportService():
 
         try:
             service_data_txt = f"{logger.transtext('Vroid2Pmx処理実行')}\n------------------------\n{logger.transtext('exeバージョン')}: {self.options.version_name}\n"
-            service_data_txt = f"{service_data_txt}　{logger.transtext('元モデル')}: {os.path.basename(self.options.vrm_model.path)}\n"
+            service_data_txt = (
+                f"{service_data_txt}　{logger.transtext('元モデル')}: {os.path.basename(self.options.vrm_model.path)}\n"
+            )
 
             logger.info(service_data_txt, translate=False, decoration=MLogger.DECORATION_BOX)
 
@@ -67,7 +96,9 @@ class VroidExportService():
             os.makedirs(os.path.dirname(self.options.output_path), exist_ok=True)
             PmxWriter().write(model, self.options.output_path)
 
-            logger.info("出力終了: %s", os.path.basename(self.options.output_path), decoration=MLogger.DECORATION_BOX, title="成功")
+            logger.info(
+                "出力終了: %s", os.path.basename(self.options.output_path), decoration=MLogger.DECORATION_BOX, title="成功"
+            )
 
             return True
         except MKilledException:
@@ -75,7 +106,9 @@ class VroidExportService():
         except SizingException as se:
             logger.error("Vroid2Pmx処理が処理できないデータで終了しました。\n\n%s", se.message, decoration=MLogger.DECORATION_BOX)
         except Exception:
-            logger.critical("Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX)
+            logger.critical(
+                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX
+            )
         finally:
             logging.shutdown()
 
@@ -92,7 +125,7 @@ class VroidExportService():
             model = self.convert_mesh(model, bone_name_dict, tex_dir_path)
             if not model:
                 return False
-            
+
             model = self.reconvert_bone(model)
             if not model:
                 return False
@@ -104,7 +137,7 @@ class VroidExportService():
             model = self.transfer_astance(model)
             if not model:
                 return False
-            
+
             bone_vertices = self.create_bone_vertices(model)
 
             model = self.create_body_physics(model, bone_vertices)
@@ -122,15 +155,22 @@ class VroidExportService():
             return se
         except Exception as e:
             import traceback
-            logger.critical("Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX)
+
+            logger.critical(
+                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX
+            )
             raise e
-    
+
     def export_pmxtailor_setting(self, model: PmxModel, setting_dir_path: str):
-        if "extensions" not in model.json_data or "VRM" not in model.json_data["extensions"] \
-                or "secondaryAnimation" not in model.json_data["extensions"]["VRM"] or "boneGroups" not in model.json_data["extensions"]["VRM"]["secondaryAnimation"] \
-                or "nodes" not in model.json_data:
+        if (
+            "extensions" not in model.json_data
+            or "VRM" not in model.json_data["extensions"]
+            or "secondaryAnimation" not in model.json_data["extensions"]["VRM"]
+            or "boneGroups" not in model.json_data["extensions"]["VRM"]["secondaryAnimation"]
+            or "nodes" not in model.json_data
+        ):
             return
-        
+
         # 材質・ボーン・頂点INDEXの対応表を作成
         bone_materials = {}
         for vidx, vertex in enumerate(model.vertex_dict.values()):
@@ -138,7 +178,7 @@ class VroidExportService():
                 bone_name = model.bone_indexes[bone_idx]
                 if bone_name not in model.vertices:
                     model.vertices[bone_name] = []
-                
+
                 model.vertices[bone_name].append(vertex)
 
                 for material_name, vidxs in model.material_vertices.items():
@@ -147,7 +187,7 @@ class VroidExportService():
                             bone_materials[bone_name] = []
                         if material_name not in bone_materials[bone_name]:
                             bone_materials[bone_name].append(material_name)
-            
+
             if vidx % 2000 == 0 and vidx > 0:
                 logger.info("-- -- PmxTailor用設定ファイル出力準備 (%s)", vidx)
 
@@ -165,28 +205,28 @@ class VroidExportService():
                         rigidbody_group = 1
                         target_bones = {}
 
-                        if '胸' in bone.name:
-                            target_names = ['CLOTH', 'SKIN']
-                            parent_bone_name = '上半身3'
-                            abb_names[logger.transtext("胸(小)")] = '胸'
-                            rigidbody_group = '1'
+                        if "胸" in bone.name:
+                            target_names = ["CLOTH", "SKIN"]
+                            parent_bone_name = "上半身3"
+                            abb_names[logger.transtext("胸(小)")] = "胸"
+                            rigidbody_group = "1"
                             target_bones[logger.transtext("胸(小)")] = []
-                            target_bones[logger.transtext("胸(小)")].append([bone.name, f'{bone.name}先'])
-                            if '左' in bone.name:
-                                target_bones[logger.transtext("胸(小)")].append(['右胸', '右胸先'])
+                            target_bones[logger.transtext("胸(小)")].append([bone.name, f"{bone.name}先"])
+                            if "左" in bone.name:
+                                target_bones[logger.transtext("胸(小)")].append(["右胸", "右胸先"])
                             else:
-                                target_bones[logger.transtext("胸(小)")].append(['左胸', '左胸先'])
-                        elif '髪' in bone.name:
-                            target_names = ['HAIR']
-                            parent_bone_name = '頭'
-                            rigidbody_group = '4'
+                                target_bones[logger.transtext("胸(小)")].append(["左胸", "左胸先"])
+                        elif "髪" in bone.name:
+                            target_names = ["HAIR"]
+                            parent_bone_name = "頭"
+                            rigidbody_group = "4"
                             hair_bones = {}
                             for bname in model.bones.keys():
-                                if '髪' in bname:
+                                if "髪" in bname:
                                     if bname[:4] not in hair_bones:
                                         hair_bones[bname[:4]] = []
                                     hair_bones[bname[:4]].append(bname)
-                            
+
                             for hbones in hair_bones.values():
                                 if len(hbones) < 4:
                                     if logger.transtext("髪(ショート)") not in target_bones:
@@ -196,21 +236,21 @@ class VroidExportService():
                                     if logger.transtext("髪(ロング)") not in target_bones:
                                         target_bones[logger.transtext("髪(ロング)")] = []
                                     target_bones[logger.transtext("髪(ロング)")].append(hbones)
-                            
-                            if logger.transtext("髪(ショート)") in target_bones:
-                                abb_names[logger.transtext("髪(ショート)")] = '髪S'
-                            if logger.transtext("髪(ロング)") in target_bones:
-                                abb_names[logger.transtext("髪(ロング)")] = '髪L'
 
-                        elif 'CatEar' in bone.name:
-                            target_names = ['CatEar']
-                            parent_bone_name = '頭'
-                            abb_names[logger.transtext("髪(ショート)")] = 'ネコ耳'
-                            rigidbody_group = '4'
+                            if logger.transtext("髪(ショート)") in target_bones:
+                                abb_names[logger.transtext("髪(ショート)")] = "髪S"
+                            if logger.transtext("髪(ロング)") in target_bones:
+                                abb_names[logger.transtext("髪(ロング)")] = "髪L"
+
+                        elif "CatEar" in bone.name:
+                            target_names = ["CatEar"]
+                            parent_bone_name = "頭"
+                            abb_names[logger.transtext("髪(ショート)")] = "ネコ耳"
+                            rigidbody_group = "4"
                             ear_bones = {}
                             for bname in model.bones.keys():
-                                if 'CatEar' in bname:
-                                    bkey = bname[bname.find('CatEar') - 3:bname.find('CatEar') + len('CatEar')]
+                                if "CatEar" in bname:
+                                    bkey = bname[bname.find("CatEar") - 3 : bname.find("CatEar") + len("CatEar")]
                                     if bkey not in ear_bones:
                                         ear_bones[bkey] = []
                                     ear_bones[bkey].append(bname)
@@ -218,15 +258,17 @@ class VroidExportService():
                             target_bones[logger.transtext("髪(ショート)")] = []
                             for ebones in ear_bones.values():
                                 target_bones[logger.transtext("髪(ショート)")].append(ebones)
-                        elif 'RabbitEar' in bone.name:
-                            target_names = ['RabbitEar']
-                            parent_bone_name = '頭'
-                            abb_names[logger.transtext("髪(ロング)")] = 'ウサ耳'
-                            rigidbody_group = '4'
+                        elif "RabbitEar" in bone.name:
+                            target_names = ["RabbitEar"]
+                            parent_bone_name = "頭"
+                            abb_names[logger.transtext("髪(ロング)")] = "ウサ耳"
+                            rigidbody_group = "4"
                             ear_bones = {}
                             for bname in model.bones.keys():
-                                if 'RabbitEar' in bname:
-                                    bkey = bname[bname.find('RabbitEar') - 3:bname.find('RabbitEar') + len('RabbitEar')]
+                                if "RabbitEar" in bname:
+                                    bkey = bname[
+                                        bname.find("RabbitEar") - 3 : bname.find("RabbitEar") + len("RabbitEar")
+                                    ]
                                     if bkey not in ear_bones:
                                         ear_bones[bkey] = []
                                     ear_bones[bkey].append(bname)
@@ -234,51 +276,62 @@ class VroidExportService():
                             target_bones[logger.transtext("髪(ロング)")] = []
                             for ebones in ear_bones.values():
                                 target_bones[logger.transtext("髪(ロング)")].append(ebones)
-                        elif 'LowerSleeve' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '左ひじ' if '_L_' in bone.name else '右ひじ'
-                            abb_names[logger.transtext("単一揺れ物")] = '左袖' if '_L_' in bone.name else '右袖'
-                            rigidbody_group = '3'
+                        elif "LowerSleeve" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
+                            abb_names[logger.transtext("単一揺れ物")] = "左袖" if "_L_" in bone.name else "右袖"
+                            rigidbody_group = "3"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif 'TipSleeve' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '左手首' if '_L_' in bone.name else '右手首'
-                            abb_names[logger.transtext("単一揺れ物")] = '左袖口' if '_L_' in bone.name else '右袖口'
-                            rigidbody_group = '3'
+                        elif "TipSleeve" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "左手首" if "_L_" in bone.name else "右手首"
+                            abb_names[logger.transtext("単一揺れ物")] = "左袖口" if "_L_" in bone.name else "右袖口"
+                            rigidbody_group = "3"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif 'C_Hood' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '首'
-                            abb_names[logger.transtext("単一揺れ物")] = 'フード'
-                            rigidbody_group = '1'
+                        elif "C_Hood" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "首"
+                            abb_names[logger.transtext("単一揺れ物")] = "フード"
+                            rigidbody_group = "1"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif 'HoodString' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '首'
-                            abb_names[logger.transtext("単一揺れ物")] = '左紐' if '_L_' in bone.name else '右紐'
-                            rigidbody_group = '1'
+                        elif "HoodString" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "首"
+                            abb_names[logger.transtext("単一揺れ物")] = "左紐" if "_L_" in bone.name else "右紐"
+                            rigidbody_group = "1"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif 'Skirt' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '下半身'
-                            abb_names[logger.transtext("布(コットン)")] = 'Skrt'
-                            rigidbody_group = '7'
+                        elif "Skirt" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "下半身"
+                            abb_names[logger.transtext("布(コットン)")] = "Skrt"
+                            rigidbody_group = "7"
                             target_bones[logger.transtext("布(コットン)")] = [[]]
                             # スカートは範囲全部
-                            for nidx, vertical_name in enumerate(['L_SkirtSide', 'L_SkirtBack', 'R_SkirtBack', 'R_SkirtSide', 'R_SkirtFront', 'L_SkirtFront']):
+                            for nidx, vertical_name in enumerate(
+                                [
+                                    "L_SkirtSide",
+                                    "L_SkirtBack",
+                                    "R_SkirtBack",
+                                    "R_SkirtSide",
+                                    "R_SkirtFront",
+                                    "L_SkirtFront",
+                                ]
+                            ):
                                 if nidx > 0 and len(target_bones[logger.transtext("布(コットン)")][-1]) > 0:
                                     target_bones[logger.transtext("布(コットン)")].append([])
                                 for bname in model.bones.keys():
                                     if vertical_name in bname:
                                         target_bones[logger.transtext("布(コットン)")][-1].append(bname)
-                        elif 'Coat' in bone.name:
-                            target_names = ['CLOTH']
-                            parent_bone_name = '下半身'
-                            abb_names[logger.transtext("布(デニム)")] = 'Coat'
-                            rigidbody_group = '7'
+                        elif "Coat" in bone.name:
+                            target_names = ["CLOTH"]
+                            parent_bone_name = "下半身"
+                            abb_names[logger.transtext("布(デニム)")] = "Coat"
+                            rigidbody_group = "7"
                             target_bones[logger.transtext("布(デニム)")] = [[]]
                             # コートは範囲全部
-                            for nidx, vertical_name in enumerate(['L_CoatSide', 'L_CoatBack', 'R_CoatBack', 'R_CoatSide', 'R_CoatFront', 'L_CoatFront']):
+                            for nidx, vertical_name in enumerate(
+                                ["L_CoatSide", "L_CoatBack", "R_CoatBack", "R_CoatSide", "R_CoatFront", "L_CoatFront"]
+                            ):
                                 if nidx > 0 and len(target_bones[logger.transtext("布(デニム)")][-1]) > 0:
                                     target_bones[logger.transtext("布(デニム)")].append([])
                                 for bname in model.bones.keys():
@@ -286,9 +339,13 @@ class VroidExportService():
                                         target_bones[logger.transtext("布(デニム)")][-1].append(bname)
 
                         if not target_names:
-                            logger.warning("VRoid Studioで物理が設定ボーンの変換先が見つかりませんでした。 ボーン名: %s", bone.name, decoration=MLogger.DECORATION_BOX)
+                            logger.warning(
+                                "VRoid Studioで物理が設定ボーンの変換先が見つかりませんでした。 ボーン名: %s",
+                                bone.name,
+                                decoration=MLogger.DECORATION_BOX,
+                            )
                             break
-                        
+
                         for target_name in target_names:
                             for material_name in weighted_material_names:
                                 if target_name in material_name:
@@ -296,26 +353,30 @@ class VroidExportService():
                                     break
                             if target_material_name:
                                 break
-                        
+
                         if target_material_name and target_bones.keys():
                             for primitive_name, primitive_target_bones in target_bones.items():
                                 if primitive_target_bones[-1]:
                                     abb_name = abb_names[primitive_name]
                                     tailor_setting = {}
-                                    tailor_setting['material_name'] = model.materials[target_material_name].name
-                                    tailor_setting['parent_bone_name'] = parent_bone_name
-                                    tailor_setting['abb_name'] = abb_name
-                                    tailor_setting['group'] = rigidbody_group
-                                    tailor_setting['direction'] = '下'
-                                    tailor_setting['primitive'] = primitive_name
-                                    tailor_setting['exist_physics_clear'] = logger.transtext("再利用")
-                                    tailor_setting['target_bones'] = primitive_target_bones
+                                    tailor_setting["material_name"] = model.materials[target_material_name].name
+                                    tailor_setting["parent_bone_name"] = parent_bone_name
+                                    tailor_setting["abb_name"] = abb_name
+                                    tailor_setting["group"] = rigidbody_group
+                                    tailor_setting["direction"] = "下"
+                                    tailor_setting["primitive"] = primitive_name
+                                    tailor_setting["exist_physics_clear"] = logger.transtext("再利用")
+                                    tailor_setting["target_bones"] = primitive_target_bones
 
-                                    with open(os.path.join(setting_dir_path, f"{abb_name}.json"), "w", encoding='utf-8') as jf:
-                                        json.dump(tailor_setting, jf, ensure_ascii=False, indent=4, separators=(',', ': '))
+                                    with open(
+                                        os.path.join(setting_dir_path, f"{abb_name}.json"), "w", encoding="utf-8"
+                                    ) as jf:
+                                        json.dump(
+                                            tailor_setting, jf, ensure_ascii=False, indent=4, separators=(",", ": ")
+                                        )
 
                             break
-                if not re.search(r'HoodString|Sleeve', bone_bname):
+                if not re.search(r"HoodString|Sleeve", bone_bname):
                     # 袖・フードの紐は別々に設定が必要なのでbreakしない
                     break
 
@@ -323,14 +384,18 @@ class VroidExportService():
 
     def create_body_physics(self, model: PmxModel, bone_vertices: dict):
         for bone_name, bone in model.bones.items():
-            if bone.index not in bone_vertices or bone.english_name not in BONE_PAIRS or (bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]['rigidbodyGroup'] < 0):
+            if (
+                bone.index not in bone_vertices
+                or bone.english_name not in BONE_PAIRS
+                or (bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]["rigidbodyGroup"] < 0)
+            ):
                 # ボーンに紐付く頂点がないか、人体ボーンで対象外の場合、スルー
                 continue
 
-            rigidbody_shape = BONE_PAIRS[bone.english_name]['rigidbodyShape']
-            rigidbody_mode = BONE_PAIRS[bone.english_name]['rigidbodyMode']
-            collision_group = BONE_PAIRS[bone.english_name]['rigidbodyGroup']
-            no_collision_group_list = BONE_PAIRS[bone.english_name]['rigidbodyNoColl']
+            rigidbody_shape = BONE_PAIRS[bone.english_name]["rigidbodyShape"]
+            rigidbody_mode = BONE_PAIRS[bone.english_name]["rigidbodyMode"]
+            collision_group = BONE_PAIRS[bone.english_name]["rigidbodyGroup"]
+            no_collision_group_list = BONE_PAIRS[bone.english_name]["rigidbodyNoColl"]
 
             no_collision_group = 0
             for nc in range(16):
@@ -384,7 +449,7 @@ class VroidExportService():
                 axis_vec = tail_position - bone.position
                 tail_pos = axis_vec.normalized()
                 tail_vec = tail_pos.data()
-                
+
                 # 回転量
                 to_vec = MVector3D.crossProduct(MVector3D(mean_normal), MVector3D(tail_vec)).normalized()
                 if rigidbody_shape == 1:
@@ -394,31 +459,37 @@ class VroidExportService():
                 else:
                     # カプセル
                     rot = MQuaternion.rotationTo(MVector3D(0, 1, 0), tail_pos)
-                    if '上' in bone.name or '下' in bone.name:
+                    if "上" in bone.name or "下" in bone.name:
                         # 体幹は横に倒しておく
                         rot *= MQuaternion.fromEulerAngles(0, 0, 90)
                 shape_euler = rot.toEulerAngles()
-                shape_rotation = MVector3D(math.radians(shape_euler.x()), math.radians(shape_euler.y()), math.radians(shape_euler.z()))
+                shape_rotation = MVector3D(
+                    math.radians(shape_euler.x()), math.radians(shape_euler.y()), math.radians(shape_euler.z())
+                )
 
                 # 軸の長さ
                 if rigidbody_shape == 1:
                     # 箱
-                    if (tail_bone and tail_bone.tail_index == -1):
+                    if tail_bone and tail_bone.tail_index == -1:
                         # 末端の場合、頂点の距離感で決める
                         shape_size = MVector3D(diff_size[0] * 0.7, diff_size[1] * 0.7, diff_size[2] * 0.15)
                     else:
                         # 途中の場合、ボーンの距離感で決める
-                        shape_size = MVector3D(diff_size[0] * 0.7, (bone.position.y() - tail_position.y()) * 0.7, diff_size[2] * 0.15)
+                        shape_size = MVector3D(
+                            diff_size[0] * 0.7, (bone.position.y() - tail_position.y()) * 0.7, diff_size[2] * 0.15
+                        )
                         center_vertex = bone.position + (tail_position - bone.position) / 2
                 else:
                     # カプセル
-                    if ('左' in bone.name or '右' in bone.name) and ('腕' in bone.name or 'ひじ' in bone.name or '手首' in bone.name):
+                    if ("左" in bone.name or "右" in bone.name) and (
+                        "腕" in bone.name or "ひじ" in bone.name or "手首" in bone.name
+                    ):
                         # 腕の場合 / 半径：Y, 高さ：X
                         shape_size = MVector3D(diff_size[1] * 0.26, abs(axis_vec.x() * 1), diff_size[2])
-                    elif '上' in bone.name or '下' in bone.name:
+                    elif "上" in bone.name or "下" in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(diff_size[0] * 0.35, abs(axis_vec.y() * 0.5), diff_size[2])
-                    elif '首' == bone.name:
+                    elif "首" == bone.name:
                         # 首の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(diff_size[0] * 0.2, abs(axis_vec.y() * 0.8), diff_size[2])
                     else:
@@ -427,16 +498,38 @@ class VroidExportService():
 
                     center_vertex = bone.position + (tail_position - bone.position) / 2
 
-            logger.debug("bone: %s, min: %s, max: %s, center: %s, size: %s", bone.name, min_vertex, max_vertex, center_vertex, shape_size.to_log())
-            rigidbody = RigidBody(bone.name, bone.english_name, bone.index, collision_group, no_collision_group, \
-                                  rigidbody_shape, shape_size, MVector3D(center_vertex), shape_rotation, 1, 0.5, 0.5, 0, 0, rigidbody_mode)
+            logger.debug(
+                "bone: %s, min: %s, max: %s, center: %s, size: %s",
+                bone.name,
+                min_vertex,
+                max_vertex,
+                center_vertex,
+                shape_size.to_log(),
+            )
+            rigidbody = RigidBody(
+                bone.name,
+                bone.english_name,
+                bone.index,
+                collision_group,
+                no_collision_group,
+                rigidbody_shape,
+                shape_size,
+                MVector3D(center_vertex),
+                shape_rotation,
+                1,
+                0.5,
+                0.5,
+                0,
+                0,
+                rigidbody_mode,
+            )
             rigidbody.index = len(model.rigidbodies)
             model.rigidbodies[rigidbody.name] = rigidbody
 
         logger.info("-- 身体剛体設定終了")
 
         return model
-    
+
     def create_bone_vertices(self, model: PmxModel):
         bone_vertices = {}
         for vertex in model.vertex_dict.values():
@@ -458,21 +551,27 @@ class VroidExportService():
                     bone_vertices[bone.effect_index].append(vertex)
 
         return bone_vertices
-    
+
     def transfer_astance(self, model: PmxModel):
         # 各頂点
         all_vertex_relative_poses = {}
         for vertex in model.vertex_dict.values():
             if type(vertex.deform) is Bdef1:
-                all_vertex_relative_poses[vertex.index] = [vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position]
+                all_vertex_relative_poses[vertex.index] = [
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position
+                ]
             elif type(vertex.deform) is Bdef2:
-                all_vertex_relative_poses[vertex.index] = [vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position, \
-                                                           vertex.position - model.bones[model.bone_indexes[vertex.deform.index1]].position]
+                all_vertex_relative_poses[vertex.index] = [
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position,
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index1]].position,
+                ]
             elif type(vertex.deform) is Bdef4:
-                all_vertex_relative_poses[vertex.index] = [vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position, \
-                                                           vertex.position - model.bones[model.bone_indexes[vertex.deform.index1]].position, \
-                                                           vertex.position - model.bones[model.bone_indexes[vertex.deform.index2]].position, \
-                                                           vertex.position - model.bones[model.bone_indexes[vertex.deform.index3]].position]
+                all_vertex_relative_poses[vertex.index] = [
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index0]].position,
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index1]].position,
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index2]].position,
+                    vertex.position - model.bones[model.bone_indexes[vertex.deform.index3]].position,
+                ]
 
         trans_bone_vecs = {}
         trans_bone_mats = {}
@@ -482,34 +581,48 @@ class VroidExportService():
         trans_bone_vecs["全ての親"] = MVector3D()
         trans_bone_mats["全ての親"] = MMatrix4x4()
         trans_bone_mats["全ての親"].setToIdentity()
- 
-        bone_names = ['頭']
+
+        bone_names = ["頭"]
 
         for direction in ["右", "左"]:
-            bone_names.extend([f'{direction}親指先', f'{direction}人指先', f'{direction}中指先', f'{direction}薬指先', f'{direction}小指先', \
-                               f'{direction}胸先', f'{direction}腕捩1', f'{direction}腕捩2', f'{direction}腕捩3', f'{direction}手捩1', f'{direction}手捩2', f'{direction}手捩3'])
+            bone_names.extend(
+                [
+                    f"{direction}親指先",
+                    f"{direction}人指先",
+                    f"{direction}中指先",
+                    f"{direction}薬指先",
+                    f"{direction}小指先",
+                    f"{direction}胸先",
+                    f"{direction}腕捩1",
+                    f"{direction}腕捩2",
+                    f"{direction}腕捩3",
+                    f"{direction}手捩1",
+                    f"{direction}手捩2",
+                    f"{direction}手捩3",
+                ]
+            )
 
         # 装飾は人体の後
         for bname in model.bones.keys():
-            if '装飾_' in bname:
+            if "装飾_" in bname:
                 bone_names.append(bname)
 
         for end_bone_name in bone_names:
-            bone_links = model.create_link_2_top_one(end_bone_name, is_defined=False).to_links('上半身')
+            bone_links = model.create_link_2_top_one(end_bone_name, is_defined=False).to_links("上半身")
             if len(bone_links.all().keys()) == 0:
                 continue
-            
+
             trans_vs = MServiceUtils.calc_relative_position(model, bone_links, VmdMotion(), 0)
 
-            if '右' in ','.join(list(bone_links.all().keys())):
+            if "右" in ",".join(list(bone_links.all().keys())):
                 astance_qq = MQuaternion.fromEulerAngles(0, 0, 35)
-                arm_bone_name = '右腕'
-            elif '左' in ','.join(list(bone_links.all().keys())):
+                arm_bone_name = "右腕"
+            elif "左" in ",".join(list(bone_links.all().keys())):
                 astance_qq = MQuaternion.fromEulerAngles(0, 0, -35)
-                arm_bone_name = '左腕'
+                arm_bone_name = "左腕"
             else:
                 astance_qq = MQuaternion.fromEulerAngles(0, 0, 0)
-                arm_bone_name = ''
+                arm_bone_name = ""
 
             mat = MMatrix4x4()
             mat.setToIdentity()
@@ -518,11 +631,11 @@ class VroidExportService():
                 if bone_name == arm_bone_name:
                     # 腕だけ回転させる
                     mat.rotate(astance_qq)
-                
+
                 if bone_name not in trans_bone_vecs:
                     trans_bone_vecs[bone_name] = mat * MVector3D()
                     trans_bone_mats[bone_name] = mat.copy()
-    
+
         for bone_name, bone_vec in trans_bone_vecs.items():
             model.bones[bone_name].position = bone_vec
 
@@ -531,85 +644,149 @@ class VroidExportService():
         for bone_name in trans_bone_mats.keys():
             bone = model.bones[bone_name]
             direction = bone_name[0]
-            arm_bone_name = f'{direction}腕'
-            elbow_bone_name = f'{direction}ひじ'
-            wrist_bone_name = f'{direction}手首'
-            finger_bone_name = f'{direction}中指１'
-            
+            arm_bone_name = f"{direction}腕"
+            elbow_bone_name = f"{direction}ひじ"
+            wrist_bone_name = f"{direction}手首"
+            finger_bone_name = f"{direction}中指１"
+
             # ローカル軸
-            if bone.name in ['右肩', '左肩'] and arm_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[arm_bone_name].position - model.bones[bone.name].position).normalized()
+            if bone.name in ["右肩", "左肩"] and arm_bone_name in model.bones:
+                bone.local_x_vector = (
+                    model.bones[arm_bone_name].position - model.bones[bone.name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右腕', '左腕'] and elbow_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[bone.name].position).normalized()
+            if bone.name in ["右腕", "左腕"] and elbow_bone_name in model.bones:
+                bone.local_x_vector = (
+                    model.bones[elbow_bone_name].position - model.bones[bone.name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右ひじ', '左ひじ'] and wrist_bone_name in model.bones:
+            if bone.name in ["右ひじ", "左ひじ"] and wrist_bone_name in model.bones:
                 # ローカルYで曲げる
-                bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[bone.name].position).normalized()
+                bone.local_x_vector = (
+                    model.bones[wrist_bone_name].position - model.bones[bone.name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(local_y_vector, bone.local_x_vector).normalized()
-            if bone.name in ['右手首', '左手首'] and finger_bone_name in model.bones:
-                bone.local_x_vector = (model.bones[finger_bone_name].position - model.bones[bone.name].position).normalized()
+            if bone.name in ["右手首", "左手首"] and finger_bone_name in model.bones:
+                bone.local_x_vector = (
+                    model.bones[finger_bone_name].position - model.bones[bone.name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             # 捩り
-            if bone.name in ['右腕捩', '左腕捩'] and arm_bone_name in model.bones and elbow_bone_name in model.bones:
-                bone.fixed_axis = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
-                bone.local_x_vector = (model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position).normalized()
+            if bone.name in ["右腕捩", "左腕捩"] and arm_bone_name in model.bones and elbow_bone_name in model.bones:
+                bone.fixed_axis = (
+                    model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position
+                ).normalized()
+                bone.local_x_vector = (
+                    model.bones[elbow_bone_name].position - model.bones[arm_bone_name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
-            if bone.name in ['右手捩', '左手捩'] and elbow_bone_name in model.bones and wrist_bone_name in model.bones:
-                bone.fixed_axis = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
-                bone.local_x_vector = (model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position).normalized()
+            if bone.name in ["右手捩", "左手捩"] and elbow_bone_name in model.bones and wrist_bone_name in model.bones:
+                bone.fixed_axis = (
+                    model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position
+                ).normalized()
+                bone.local_x_vector = (
+                    model.bones[wrist_bone_name].position - model.bones[elbow_bone_name].position
+                ).normalized()
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
             # 指
-            if bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]['display'] and '指' in BONE_PAIRS[bone.english_name]['display']:
-                bone.local_x_vector = (model.bones[model.bone_indexes[bone.tail_index]].position - model.bones[model.bone_indexes[bone.parent_index]].position).normalized()    # noqa
+            if (
+                bone.english_name in BONE_PAIRS
+                and BONE_PAIRS[bone.english_name]["display"]
+                and "指" in BONE_PAIRS[bone.english_name]["display"]
+            ):
+                bone.local_x_vector = (
+                    model.bones[model.bone_indexes[bone.tail_index]].position
+                    - model.bones[model.bone_indexes[bone.parent_index]].position
+                ).normalized()  # noqa
                 bone.local_z_vector = MVector3D.crossProduct(bone.local_x_vector, local_y_vector).normalized()
 
         for vertex_idx, vertex_relative_poses in all_vertex_relative_poses.items():
             if vertex_idx not in trans_vertex_vecs:
                 vertex = model.vertex_dict[vertex_idx]
                 if type(vertex.deform) is Bdef1 and model.bone_indexes[vertex.deform.index0] in trans_bone_mats:
-                    trans_vertex_vecs[vertex.index] = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
-                    trans_normal_vecs[vertex.index] = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                elif type(vertex.deform) is Bdef2 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats):
+                    trans_vertex_vecs[vertex.index] = (
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
+                    )
+                    trans_normal_vecs[vertex.index] = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal
+                    )
+                elif type(vertex.deform) is Bdef2 and (
+                    model.bone_indexes[vertex.deform.index0] in trans_bone_mats
+                    and model.bone_indexes[vertex.deform.index1] in trans_bone_mats
+                ):
                     v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
                     v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
-                    trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * (1 - vertex.deform.weight0))
+                    trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (
+                        v1_vec * (1 - vertex.deform.weight0)
+                    )
 
-                    v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                    v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
-                    trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * (1 - vertex.deform.weight0))
-                elif type(vertex.deform) is Bdef4 and (model.bone_indexes[vertex.deform.index0] in trans_bone_mats and model.bone_indexes[vertex.deform.index1] in trans_bone_mats \
-                                                       and model.bone_indexes[vertex.deform.index2] in trans_bone_mats and model.bone_indexes[vertex.deform.index3] in trans_bone_mats):
+                    v0_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal
+                    )
+                    v1_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal
+                    )
+                    trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (
+                        v1_normal * (1 - vertex.deform.weight0)
+                    )
+                elif type(vertex.deform) is Bdef4 and (
+                    model.bone_indexes[vertex.deform.index0] in trans_bone_mats
+                    and model.bone_indexes[vertex.deform.index1] in trans_bone_mats
+                    and model.bone_indexes[vertex.deform.index2] in trans_bone_mats
+                    and model.bone_indexes[vertex.deform.index3] in trans_bone_mats
+                ):
                     v0_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index0]] * vertex_relative_poses[0]
                     v1_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index1]] * vertex_relative_poses[1]
                     v2_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index2]] * vertex_relative_poses[2]
                     v3_vec = trans_bone_mats[model.bone_indexes[vertex.deform.index3]] * vertex_relative_poses[3]
-                    trans_vertex_vecs[vertex.index] = (v0_vec * vertex.deform.weight0) + (v1_vec * vertex.deform.weight1) + (v2_vec * vertex.deform.weight2) + (v3_vec * vertex.deform.weight3)
+                    trans_vertex_vecs[vertex.index] = (
+                        (v0_vec * vertex.deform.weight0)
+                        + (v1_vec * vertex.deform.weight1)
+                        + (v2_vec * vertex.deform.weight2)
+                        + (v3_vec * vertex.deform.weight3)
+                    )
 
-                    v0_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal)
-                    v1_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal)
-                    v2_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index2]], vertex.normal)
-                    v3_normal = self.calc_normal(trans_bone_mats[model.bone_indexes[vertex.deform.index3]], vertex.normal)
-                    trans_normal_vecs[vertex.index] = (v0_normal * vertex.deform.weight0) + (v1_normal * vertex.deform.weight1) + (v2_normal * vertex.deform.weight2) + (v3_normal * vertex.deform.weight3)     # noqa
+                    v0_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index0]], vertex.normal
+                    )
+                    v1_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index1]], vertex.normal
+                    )
+                    v2_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index2]], vertex.normal
+                    )
+                    v3_normal = self.calc_normal(
+                        trans_bone_mats[model.bone_indexes[vertex.deform.index3]], vertex.normal
+                    )
+                    trans_normal_vecs[vertex.index] = (
+                        (v0_normal * vertex.deform.weight0)
+                        + (v1_normal * vertex.deform.weight1)
+                        + (v2_normal * vertex.deform.weight2)
+                        + (v3_normal * vertex.deform.weight3)
+                    )  # noqa
 
         for (vertex_idx, vertex_vec), (_, vertex_normal) in zip(trans_vertex_vecs.items(), trans_normal_vecs.items()):
             model.vertex_dict[vertex_idx].position = vertex_vec
             model.vertex_dict[vertex_idx].normal = vertex_normal.normalized()
-                    
+
         logger.info("-- Aスタンス調整終了")
 
         return model
-    
+
     def calc_normal(self, bone_mat: MMatrix4x4, normal: MVector3D):
         # ボーン行列の3x3行列
         bone_invert_mat = bone_mat.data()[:3, :3]
 
         return MVector3D(np.sum(normal.data() * bone_invert_mat, axis=1)).normalized()
-    
+
     def convert_morph(self, model: PmxModel):
         # グループモーフ定義
-        if "extensions" not in model.json_data or "VRM" not in model.json_data["extensions"] \
-                or "blendShapeMaster" not in model.json_data["extensions"]["VRM"] or "blendShapeGroups" not in model.json_data["extensions"]["VRM"]["blendShapeMaster"]:
+        if (
+            "extensions" not in model.json_data
+            or "VRM" not in model.json_data["extensions"]
+            or "blendShapeMaster" not in model.json_data["extensions"]["VRM"]
+            or "blendShapeGroups" not in model.json_data["extensions"]["VRM"]["blendShapeMaster"]
+        ):
             return model
 
         # 一旦置き換えて、既存はクリア
@@ -628,7 +805,7 @@ class VroidExportService():
                 morph_panel = MORPH_PAIRS[shape["name"]]["panel"]
             morph = Morph(morph_name, shape["name"], morph_panel, 0)
             morph.index = len(target_morphs)
-            
+
             if shape["name"] in MORPH_PAIRS and "binds" in MORPH_PAIRS[shape["name"]]:
                 for bind in MORPH_PAIRS[shape["name"]]["binds"]:
                     morph.offsets.append(GroupMorphData(target_morphs[bind].index, 1))
@@ -643,7 +820,9 @@ class VroidExportService():
                 # 統合グループモーフ（ある場合だけ）
                 morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 0)
                 morph.index = len(target_morphs)
-                ratios = morph_pair['ratios'] if 'ratios' in morph_pair else [1 for _ in range(len(morph_pair["binds"]))]
+                ratios = (
+                    morph_pair["ratios"] if "ratios" in morph_pair else [1 for _ in range(len(morph_pair["binds"]))]
+                )
                 for bind_name, bind_ratio in zip(morph_pair["binds"], ratios):
                     if bind_name in target_morphs:
                         bind_morph = target_morphs[bind_name]
@@ -656,7 +835,7 @@ class VroidExportService():
                     org_morph = target_morphs[morph_pair["split"]]
                     target_offset = []
                     if org_morph.morph_type == 1:
-                        if re.search(r'raiseEyelid_', morph_name):
+                        if re.search(r"raiseEyelid_", morph_name):
                             # 目の上下で分けるタイプ
                             vertex_poses = []
                             for offset in org_morph.offsets:
@@ -675,20 +854,36 @@ class VroidExportService():
                                     continue
                                 vertex = model.vertex_dict[offset.vertex_index]
                                 if vertex.position.y() <= min_limit_y:
-                                    ratio = 1 if vertex.position.y() < max_limit_y else calc_ratio(vertex.position.y(), min_vertex[1], max_limit_y, 0, 1)
-                                    target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
+                                    ratio = (
+                                        1
+                                        if vertex.position.y() < max_limit_y
+                                        else calc_ratio(vertex.position.y(), min_vertex[1], max_limit_y, 0, 1)
+                                    )
+                                    target_offset.append(
+                                        VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio)
+                                    )
                         else:
                             for offset in org_morph.offsets:
                                 if offset.position_offset == MVector3D():
                                     continue
                                 vertex = model.vertex_dict[offset.vertex_index]
-                                if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0):
+                                if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or (
+                                    "_L" == morph_name[-2:] and vertex.position.x() > 0
+                                ):
                                     if morph_pair["panel"] == MORPH_LIP:
                                         # リップは中央にいくに従ってオフセットを弱める
-                                        ratio = 1 if abs(vertex.position.x()) >= 0.2 else calc_ratio(abs(vertex.position.x()), 0, 0.2, 0, 1)
-                                        target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio))
+                                        ratio = (
+                                            1
+                                            if abs(vertex.position.x()) >= 0.2
+                                            else calc_ratio(abs(vertex.position.x()), 0, 0.2, 0, 1)
+                                        )
+                                        target_offset.append(
+                                            VertexMorphOffset(offset.vertex_index, offset.position_offset * ratio)
+                                        )
                                     else:
-                                        target_offset.append(VertexMorphOffset(offset.vertex_index, offset.position_offset.copy()))
+                                        target_offset.append(
+                                            VertexMorphOffset(offset.vertex_index, offset.position_offset.copy())
+                                        )
                     if target_offset:
                         morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
                         morph.index = len(target_morphs)
@@ -700,10 +895,10 @@ class VroidExportService():
                 target_material_vertices = []
                 face_material_vertices = None
                 for mat_name, mat_vert in model.material_vertices.items():
-                    for create_mat_name in morph_pair['creates']:
+                    for create_mat_name in morph_pair["creates"]:
                         if create_mat_name in mat_name:
                             target_material_vertices.extend(mat_vert)
-                    if '_Face_' in mat_name:
+                    if "_Face_" in mat_name:
                         face_material_vertices = mat_vert
 
                 if target_material_vertices and face_material_vertices:
@@ -715,14 +910,14 @@ class VroidExportService():
                         vertex = model.vertex_dict[vidx]
                         face_poses.append(vertex.position.data())
 
-                    if 'brow_' in morph_name:
+                    if "brow_" in morph_name:
                         # 眉
                         # デフォルトの移動量（とりあえず適当に）
                         offset_distance = 0.2
                         # 眉は目との距離
                         eyeline_material_vertices = None
                         for mat_name, mat_vert in model.material_vertices.items():
-                            if '_FaceEyeline_' in mat_name:
+                            if "_FaceEyeline_" in mat_name:
                                 eyeline_material_vertices = mat_vert
                                 break
                         # 処理対象の位置データ
@@ -744,54 +939,95 @@ class VroidExportService():
 
                         for vidx in target_material_vertices:
                             vertex = model.vertex_dict[vidx]
-                            if ("_R" == morph_name[-2:] and vertex.position.x() < 0) or ("_L" == morph_name[-2:] and vertex.position.x() > 0) or ("_R" != morph_name[-2:] and "_L" != morph_name[-2:]):
-                                if '_Below' in morph_name:
+                            if (
+                                ("_R" == morph_name[-2:] and vertex.position.x() < 0)
+                                or ("_L" == morph_name[-2:] and vertex.position.x() > 0)
+                                or ("_R" != morph_name[-2:] and "_L" != morph_name[-2:])
+                            ):
+                                if "_Below" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, -offset_distance, 0))
-                                if '_Abobe' in morph_name:
+                                if "_Abobe" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, offset_distance, 0))
-                                if '_Left' in morph_name:
+                                if "_Left" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(-offset_distance, 0, 0))
-                                if '_Right' in morph_name:
+                                if "_Right" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(offset_distance, 0, 0))
-                                if '_Front' in morph_name:
+                                if "_Front" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, 0, -offset_distance))
-                                if '_Front' not in morph_name:
+                                if "_Front" not in morph_name:
                                     # 移動後の顔材質との距離を測る
-                                    face_distances = np.linalg.norm((np.array(face_poses) - (morph_offset.position_offset + vertex.position).data()), ord=2, axis=1)
+                                    face_distances = np.linalg.norm(
+                                        (
+                                            np.array(face_poses)
+                                            - (morph_offset.position_offset + vertex.position).data()
+                                        ),
+                                        ord=2,
+                                        axis=1,
+                                    )
                                     # 近い顔頂点の位置
                                     near_face_poses = np.array(face_poses)[np.argsort(face_distances)[:4]]
                                     # Z方向の補正(一番手前っぽいのに合わせる)
-                                    morph_offset.position_offset.setZ((np.mean(near_face_poses, axis=0) - (morph_offset.position_offset + vertex.position).data())[2] - 0.01)
+                                    morph_offset.position_offset.setZ(
+                                        (
+                                            np.mean(near_face_poses, axis=0)
+                                            - (morph_offset.position_offset + vertex.position).data()
+                                        )[2]
+                                        - 0.01
+                                    )
                                 target_offset.append(morph_offset)
-                    elif 'eye_Small' in morph_name:
+                    elif "eye_Small" in morph_name:
                         # 瞳小
-                        base_morph = target_morphs['Fcl_EYE_Surprised_R'] if 'eye_Small_R' == morph_name else target_morphs['Fcl_EYE_Surprised_L']
+                        base_morph = (
+                            target_morphs["Fcl_EYE_Surprised_R"]
+                            if "eye_Small_R" == morph_name
+                            else target_morphs["Fcl_EYE_Surprised_L"]
+                        )
                         for base_offset in base_morph.offsets:
                             # びっくりの目部分だけ抜き出す
                             if base_offset.vertex_index in target_material_vertices:
                                 target_offset.append(copy.deepcopy(base_offset))
-                    elif 'eye_Big' in morph_name:
+                    elif "eye_Big" in morph_name:
                         # 瞳大
-                        base_morph = target_morphs['Fcl_EYE_Surprised_R'] if 'eye_Big_R' == morph_name else target_morphs['Fcl_EYE_Surprised_L']
+                        base_morph = (
+                            target_morphs["Fcl_EYE_Surprised_R"]
+                            if "eye_Big_R" == morph_name
+                            else target_morphs["Fcl_EYE_Surprised_L"]
+                        )
                         for base_offset in base_morph.offsets:
                             # びっくりの目部分だけ抜き出して大きさ反転
                             if base_offset.vertex_index in target_material_vertices:
-                                target_offset.append(VertexMorphOffset(base_offset.vertex_index, base_offset.position_offset * -1))
-                       
+                                target_offset.append(
+                                    VertexMorphOffset(base_offset.vertex_index, base_offset.position_offset * -1)
+                                )
+
                     if target_offset:
                         morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
                         morph.index = len(target_morphs)
                         morph.offsets = target_offset
 
                         target_morphs[morph_name] = morph
-            elif 'material' in morph_pair:
+            elif "material" in morph_pair:
                 # 材質モーフ
                 for material_index, material in enumerate(model.materials.values()):
-                    if morph_pair['material'] in model.textures[material.texture_index]:
+                    if morph_pair["material"] in model.textures[material.texture_index]:
                         # 材質名が含まれている場合、対象
                         morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
                         morph.index = len(target_morphs)
-                        morph.offsets = [MaterialMorphData(material_index, 1, MVector4D(0, 0, 0, 1), MVector3D(), 0, MVector3D(), MVector4D(), 0, MVector4D(), MVector4D(), MVector4D())]
+                        morph.offsets = [
+                            MaterialMorphData(
+                                material_index,
+                                1,
+                                MVector4D(0, 0, 0, 1),
+                                MVector3D(),
+                                0,
+                                MVector3D(),
+                                MVector4D(),
+                                0,
+                                MVector4D(),
+                                MVector4D(),
+                                MVector4D(),
+                            )
+                        ]
 
                         target_morphs[morph_name] = morph
             else:
@@ -799,7 +1035,7 @@ class VroidExportService():
                     morph = target_morphs[morph_name]
                     morph.name = morph_pair["name"]
                     morph.panel = morph_pair["panel"]
-        
+
         target_morph_indexes = {}
         for morph_name in MORPH_PAIRS.keys():
             if morph_name not in target_morphs:
@@ -809,86 +1045,103 @@ class VroidExportService():
             target_morph_indexes[morph.index] = len(model.org_morphs)
             morph.index = len(model.org_morphs)
             model.org_morphs[morph.name] = morph
-        
+
         for morph in model.org_morphs.values():
             if morph.morph_type == 0:
                 # グループモーフの場合、新旧入替
                 for offset in morph.offsets:
                     old_idx = offset.morph_index
                     offset.morph_index = target_morph_indexes[old_idx]
-            if '材質' not in morph.name:
+            if "材質" not in morph.name:
                 model.display_slots["表情"].references.append((1, morph.index))
 
-        logger.info('-- グループモーフデータ解析')
+        logger.info("-- グループモーフデータ解析")
 
         return model
 
     def reconvert_bone(self, model: PmxModel):
         # 指先端の位置を計算して配置
-        finger_dict = {'左親指２': {'vertices': [], 'direction': -1, 'edge_name': '左親指先'}, '左人指３': {'vertices': [], 'direction': -1, 'edge_name': '左人指先'}, \
-                       '左中指３': {'vertices': [], 'direction': -1, 'edge_name': '左中指先'}, '左薬指３': {'vertices': [], 'direction': -1, 'edge_name': '左薬指先'}, \
-                       '左小指３': {'vertices': [], 'direction': -1, 'edge_name': '左小指先'}, '右親指２': {'vertices': [], 'direction': 1, 'edge_name': '右親指先'}, \
-                       '右人指３': {'vertices': [], 'direction': 1, 'edge_name': '右人指先'}, '右中指３': {'vertices': [], 'direction': 1, 'edge_name': '右中指先'}, \
-                       '右薬指３': {'vertices': [], 'direction': 1, 'edge_name': '右薬指先'}, '右小指３': {'vertices': [], 'direction': 1, 'edge_name': '右小指先'}}
+        finger_dict = {
+            "左親指２": {"vertices": [], "direction": -1, "edge_name": "左親指先"},
+            "左人指３": {"vertices": [], "direction": -1, "edge_name": "左人指先"},
+            "左中指３": {"vertices": [], "direction": -1, "edge_name": "左中指先"},
+            "左薬指３": {"vertices": [], "direction": -1, "edge_name": "左薬指先"},
+            "左小指３": {"vertices": [], "direction": -1, "edge_name": "左小指先"},
+            "右親指２": {"vertices": [], "direction": 1, "edge_name": "右親指先"},
+            "右人指３": {"vertices": [], "direction": 1, "edge_name": "右人指先"},
+            "右中指３": {"vertices": [], "direction": 1, "edge_name": "右中指先"},
+            "右薬指３": {"vertices": [], "direction": 1, "edge_name": "右薬指先"},
+            "右小指３": {"vertices": [], "direction": 1, "edge_name": "右小指先"},
+        }
         # つま先の位置を計算して配置
-        toe_dict = {'左足先EX': {'vertices': [], 'edge_name': '左つま先', 'ik_name': '左つま先ＩＫ'}, '右足先EX': {'vertices': [], 'edge_name': '右つま先', 'ik_name': '右つま先ＩＫ'}}
-        
+        toe_dict = {
+            "左足先EX": {"vertices": [], "edge_name": "左つま先", "ik_name": "左つま先ＩＫ"},
+            "右足先EX": {"vertices": [], "edge_name": "右つま先", "ik_name": "右つま先ＩＫ"},
+        }
+
         for vertex_idx, vertex in model.vertex_dict.items():
             if type(vertex.deform) is Bdef1:
                 # 指先に相当する頂点位置をリスト化
                 for finger_name in finger_dict.keys():
                     if model.bones[finger_name].index == vertex.deform.index0:
-                        finger_dict[finger_name]['vertices'].append(vertex.position)
+                        finger_dict[finger_name]["vertices"].append(vertex.position)
                 # つま先に相当する頂点位置をリスト化
                 for toe_name in toe_dict.keys():
                     if model.bones[toe_name].index == vertex.deform.index0:
-                        toe_dict[toe_name]['vertices'].append(vertex.position)
-        
+                        toe_dict[toe_name]["vertices"].append(vertex.position)
+
         for finger_name, finger_param in finger_dict.items():
-            if len(finger_param['vertices']) > 0:
+            if len(finger_param["vertices"]) > 0:
                 # 末端頂点の位置を指先ボーンの位置として割り当て
-                finger_vertices = sorted(finger_param['vertices'], key=lambda v: v.x() * finger_param['direction'])
+                finger_vertices = sorted(finger_param["vertices"], key=lambda v: v.x() * finger_param["direction"])
                 edge_vertex_pos = finger_vertices[0]
-                model.bones[finger_param['edge_name']].position = edge_vertex_pos
+                model.bones[finger_param["edge_name"]].position = edge_vertex_pos
 
         for toe_name, toe_param in toe_dict.items():
-            if len(toe_param['vertices']) > 0:
+            if len(toe_param["vertices"]) > 0:
                 # 末端頂点の位置をつま先ボーンの位置として割り当て
-                toe_vertices = sorted(toe_param['vertices'], key=lambda v: v.z())
+                toe_vertices = sorted(toe_param["vertices"], key=lambda v: v.z())
                 edge_vertex_pos = toe_vertices[0].copy()
                 # Yは0に固定
                 edge_vertex_pos.setY(0)
-                model.bones[toe_param['edge_name']].position = edge_vertex_pos
-                model.bones[toe_param['ik_name']].position = edge_vertex_pos
-        
-        for leg_bone_name in ['腰キャンセル左', '腰キャンセル右', '左足', '右足', '左足D', '右足D']:
+                model.bones[toe_param["edge_name"]].position = edge_vertex_pos
+                model.bones[toe_param["ik_name"]].position = edge_vertex_pos
+
+        for leg_bone_name in ["腰キャンセル左", "腰キャンセル右", "左足", "右足", "左足D", "右足D"]:
             if leg_bone_name in model.bones:
                 model.bones[leg_bone_name].position.setZ(model.bones[leg_bone_name].position.z() + 0.1)
 
-        for knee_bone_name in ['左ひざ', '右ひざ', '左ひざD', '右ひざD']:
+        for knee_bone_name in ["左ひざ", "右ひざ", "左ひざD", "右ひざD"]:
             if knee_bone_name in model.bones:
                 model.bones[knee_bone_name].position.setZ(model.bones[knee_bone_name].position.z() - 0.1)
-        
+
         # 体幹を中心に揃える
         for trunk_bone_name in ["全ての親", "センター", "グルーブ", "腰", "下半身", "上半身", "上半身2", "上半身3", "首", "頭", "両目"]:
             model.bones[trunk_bone_name].position.setX(0)
 
         # 左右ボーンを線対称に揃える
         for left_bone_name, left_bone in model.bones.items():
-            right_bone_name = f'右{left_bone_name[1:]}'
-            if '左' == left_bone_name[0] and right_bone_name in model.bones:
+            right_bone_name = f"右{left_bone_name[1:]}"
+            if "左" == left_bone_name[0] and right_bone_name in model.bones:
                 right_bone = model.bones[right_bone_name]
-                mean_position = MVector3D(np.mean([abs(left_bone.position.x()), abs(right_bone.position.x())]), \
-                                          np.mean([left_bone.position.y(), right_bone.position.y()]), np.mean([left_bone.position.z(), right_bone.position.z()]))
-                left_bone.position = MVector3D(mean_position.x() * np.sign(left_bone.position.x()), mean_position.y(), mean_position.z())
-                right_bone.position = MVector3D(mean_position.x() * np.sign(right_bone.position.x()), mean_position.y(), mean_position.z())
+                mean_position = MVector3D(
+                    np.mean([abs(left_bone.position.x()), abs(right_bone.position.x())]),
+                    np.mean([left_bone.position.y(), right_bone.position.y()]),
+                    np.mean([left_bone.position.z(), right_bone.position.z()]),
+                )
+                left_bone.position = MVector3D(
+                    mean_position.x() * np.sign(left_bone.position.x()), mean_position.y(), mean_position.z()
+                )
+                right_bone.position = MVector3D(
+                    mean_position.x() * np.sign(right_bone.position.x()), mean_position.y(), mean_position.z()
+                )
 
         logger.info("-- ボーンデータ調整終了")
 
         return model
 
     def convert_mesh(self, model: PmxModel, bone_name_dict: dict, tex_dir_path: str):
-        if 'meshes' not in model.json_data:
+        if "meshes" not in model.json_data:
             logger.error("変換可能なメッシュ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
             return None
 
@@ -898,18 +1151,26 @@ class VroidExportService():
         for midx, mesh in enumerate(model.json_data["meshes"]):
             if "primitives" not in mesh:
                 continue
-            
+
             for pidx, primitive in enumerate(mesh["primitives"]):
-                if "attributes" not in primitive or "indices" not in primitive or "material" not in primitive or "JOINTS_0" not in primitive["attributes"] or "NORMAL" not in primitive["attributes"] \
-                   or "POSITION" not in primitive["attributes"] or "TEXCOORD_0" not in primitive["attributes"] or "WEIGHTS_0" not in primitive["attributes"]:
+                if (
+                    "attributes" not in primitive
+                    or "indices" not in primitive
+                    or "material" not in primitive
+                    or "JOINTS_0" not in primitive["attributes"]
+                    or "NORMAL" not in primitive["attributes"]
+                    or "POSITION" not in primitive["attributes"]
+                    or "TEXCOORD_0" not in primitive["attributes"]
+                    or "WEIGHTS_0" not in primitive["attributes"]
+                ):
                     continue
-                
+
                 # 頂点ブロック
                 vertex_key = f'{primitive["attributes"]["JOINTS_0"]}-{primitive["attributes"]["NORMAL"]}-{primitive["attributes"]["POSITION"]}-{primitive["attributes"]["TEXCOORD_0"]}-{primitive["attributes"]["WEIGHTS_0"]}'  # noqa
 
                 # 頂点データ
                 if vertex_key not in vertex_blocks:
-                    vertex_blocks[vertex_key] = {'vertices': [], 'start': vertex_idx, 'indices': [], 'materials': []}
+                    vertex_blocks[vertex_key] = {"vertices": [], "start": vertex_idx, "indices": [], "materials": []}
 
                     # 位置データ
                     positions = self.read_from_accessor(model, primitive["attributes"]["POSITION"])
@@ -925,7 +1186,7 @@ class VroidExportService():
                         joints = self.read_from_accessor(model, primitive["attributes"]["JOINTS_0"])
                     else:
                         joints = [MVector4D() for _ in range(len(positions))]
-                    
+
                     # ウェイトデータ
                     if "WEIGHTS_0" in primitive["attributes"]:
                         weights = self.read_from_accessor(model, primitive["attributes"]["WEIGHTS_0"])
@@ -934,13 +1195,17 @@ class VroidExportService():
 
                     # 対応するジョイントデータ
                     try:
-                        skin_joints = model.json_data["skins"][[s for s in model.json_data["nodes"] if "mesh" in s and s["mesh"] == midx][0]["skin"]]["joints"]
+                        skin_joints = model.json_data["skins"][
+                            [s for s in model.json_data["nodes"] if "mesh" in s and s["mesh"] == midx][0]["skin"]
+                        ]["joints"]
                     except Exception:
                         # 取れない場合はとりあえず空
                         skin_joints = []
-                        
+
                     if "extras" in primitive and "targetNames" in primitive["extras"] and "targets" in primitive:
-                        for eidx, (extra, target) in enumerate(zip(primitive["extras"]["targetNames"], primitive["targets"])):
+                        for eidx, (extra, target) in enumerate(
+                            zip(primitive["extras"]["targetNames"], primitive["targets"])
+                        ):
                             # 位置データ
                             extra_positions = self.read_from_accessor(model, target["POSITION"])
 
@@ -963,15 +1228,25 @@ class VroidExportService():
                         model_position = position * MIKU_METER * MVector3D(-1, 1, 1)
 
                         # 有効なINDEX番号と実際のボーンINDEXを取得
-                        joint_idxs, weight_values = self.get_deform_index(vertex_idx, model, model_position, joint, skin_joints, weight, bone_name_dict)
+                        joint_idxs, weight_values = self.get_deform_index(
+                            vertex_idx, model, model_position, joint, skin_joints, weight, bone_name_dict
+                        )
                         if len(joint_idxs) > 1:
                             if len(joint_idxs) == 2:
                                 # ウェイトが2つの場合、Bdef2
                                 deform = Bdef2(joint_idxs[0], joint_idxs[1], weight_values[0])
                             else:
                                 # それ以上の場合、Bdef4
-                                deform = Bdef4(joint_idxs[0], joint_idxs[1], joint_idxs[2], joint_idxs[3], \
-                                               weight_values[0], weight_values[1], weight_values[2], weight_values[3])
+                                deform = Bdef4(
+                                    joint_idxs[0],
+                                    joint_idxs[1],
+                                    joint_idxs[2],
+                                    joint_idxs[3],
+                                    weight_values[0],
+                                    weight_values[1],
+                                    weight_values[2],
+                                    weight_values[3],
+                                )
                         elif len(joint_idxs) == 1:
                             # ウェイトが1つのみの場合、Bdef1
                             deform = Bdef1(joint_idxs[0])
@@ -979,32 +1254,41 @@ class VroidExportService():
                             # とりあえず除外
                             deform = Bdef1(0)
 
-                        vertex = Vertex(vertex_idx, model_position, (normal * MVector3D(-1, 1, 1)).normalized(), uv, None, deform, 1)
+                        vertex = Vertex(
+                            vertex_idx,
+                            model_position,
+                            (normal * MVector3D(-1, 1, 1)).normalized(),
+                            uv,
+                            None,
+                            deform,
+                            1,
+                        )
 
                         model.vertex_dict[vertex_idx] = vertex
-                        vertex_blocks[vertex_key]['vertices'].append(vertex_idx)
+                        vertex_blocks[vertex_key]["vertices"].append(vertex_idx)
                         vertex_idx += 1
 
-                    logger.info('-- 頂点データ解析[%s]', vertex_key)
-                
-                vertex_blocks[vertex_key]['indices'].append(primitive["indices"])
-                vertex_blocks[vertex_key]['materials'].append(primitive["material"])
+                    logger.info("-- 頂点データ解析[%s]", vertex_key)
 
-        hair_regexp = r'((N\d+_\d+_Hair_\d+)_HAIR)'
-        hair_tex_regexp = r'_(\d+)'
+                vertex_blocks[vertex_key]["indices"].append(primitive["indices"])
+                vertex_blocks[vertex_key]["materials"].append(primitive["material"])
+
+        hair_regexp = r"((N\d+_\d+_Hair_\d+)_HAIR)"
+        hair_tex_regexp = r"_(\d+)"
 
         indices_by_materials = {}
         materials_by_type = {}
+        registed_material_names = []
 
         for vertex_key, vertex_dict in vertex_blocks.items():
-            start_vidx = vertex_dict['start']
-            indices = vertex_dict['indices']
-            materials = vertex_dict['materials']
+            start_vidx = vertex_dict["start"]
+            indices = vertex_dict["indices"]
+            materials = vertex_dict["materials"]
 
             for index_accessor, material_accessor in zip(indices, materials):
                 # 材質データ ---------------
                 vrm_material = model.json_data["materials"][material_accessor]
-                material_name = vrm_material['name']
+                material_name = vrm_material["name"]
 
                 # 材質順番を決める
                 material_key = vrm_material["alphaMode"]
@@ -1028,7 +1312,11 @@ class VroidExportService():
 
                 if material_name not in materials_by_type[material_key]:
                     # VRMの材質拡張情報
-                    material_ext = [m for m in model.json_data["extensions"]["VRM"]["materialProperties"] if m["name"] == material_name][0]
+                    material_ext = [
+                        m
+                        for m in model.json_data["extensions"]["VRM"]["materialProperties"]
+                        if m["name"] == material_name
+                    ][0]
                     # 非透過度
                     # 拡散色
                     diffuse_color_data = vrm_material["pbrMetallicRoughness"]["baseColorFactor"]
@@ -1062,25 +1350,32 @@ class VroidExportService():
                     m = re.search(hair_regexp, material_name)
                     if m is not None:
                         # 髪材質の場合、合成
-                        hair_img_name = os.path.basename(model.textures[material_ext["textureProperties"]["_MainTex"] + 1])
+                        hair_img_name = os.path.basename(
+                            model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
+                        )
                         hm = re.search(hair_tex_regexp, hair_img_name)
                         hair_img_number = -1
                         if hm is not None:
                             hair_img_number = int(hm.groups()[0])
-                        hair_spe_name = f'_{(hair_img_number + 1):02d}.png'
-                        hair_blend_name = f'_{hair_img_number:02d}_blend.png'
+                        hair_spe_name = f"_{(hair_img_number + 1):02d}.png"
+                        hair_blend_name = f"_{hair_img_number:02d}_blend.png"
 
-                        if os.path.exists(os.path.join(tex_dir_path, hair_img_name)) and os.path.exists(os.path.join(tex_dir_path, hair_spe_name)):
+                        if os.path.exists(os.path.join(tex_dir_path, hair_img_name)) and os.path.exists(
+                            os.path.join(tex_dir_path, hair_spe_name)
+                        ):
                             # スペキュラファイルがある場合
-                            hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name)).convert('RGBA')
+                            hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name)).convert("RGBA")
                             hair_ary = np.array(hair_img)
 
-                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert('RGBA')
+                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert("RGBA")
                             spe_ary = np.array(spe_img)
 
                             # 拡散色の画像
                             diffuse_ary = np.array(material_ext["vectorProperties"]["_Color"])
-                            diffuse_img = Image.fromarray(np.tile(diffuse_ary * 255, (hair_ary.shape[0], hair_ary.shape[1], 1)).astype(np.uint8), mode='RGBA')
+                            diffuse_img = Image.fromarray(
+                                np.tile(diffuse_ary * 255, (hair_ary.shape[0], hair_ary.shape[1], 1)).astype(np.uint8),
+                                mode="RGBA",
+                            )
                             hair_diffuse_img = ImageChops.multiply(hair_img, diffuse_img)
 
                             # 反射色の画像
@@ -1091,7 +1386,10 @@ class VroidExportService():
                                 # なかった場合には仮に明るめの色を入れておく
                                 logger.warning("髪の反射色がVrmデータになかったため、仮に白色を差し込みます", decoration=MLogger.DECORATION_BOX)
                                 emissive_ary = np.array([0.9, 0.9, 0.9, 1])
-                            emissive_img = Image.fromarray(np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8), mode='RGBA')
+                            emissive_img = Image.fromarray(
+                                np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8),
+                                mode="RGBA",
+                            )
                             # 乗算
                             hair_emissive_img = ImageChops.multiply(spe_img, emissive_img)
                             # スクリーン
@@ -1111,7 +1409,7 @@ class VroidExportService():
                     else:
                         # そのまま出力
                         texture_index = material_ext["textureProperties"]["_MainTex"] + 1
-                    
+
                     sphere_texture_index = 0
                     sphere_mode = 0
                     if "_SphereAdd" in material_ext["textureProperties"]:
@@ -1124,10 +1422,12 @@ class VroidExportService():
                         if material_ext["textureProperties"]["_MainTex"] < len(model.json_data["images"]):
                             toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]]["name"]}_Toon.bmp'
                         else:
-                            toon_img_name = f'{material_name}_Toon.bmp'
-                        
+                            toon_img_name = f"{material_name}_Toon.bmp"
+
                         toon_light_ary = np.tile(np.array([255, 255, 255, 255]), (24, 32, 1))
-                        toon_shadow_ary = np.tile(np.array(material_ext["vectorProperties"]["_ShadeColor"]) * 255, (8, 32, 1))
+                        toon_shadow_ary = np.tile(
+                            np.array(material_ext["vectorProperties"]["_ShadeColor"]) * 255, (8, 32, 1)
+                        )
                         toon_ary = np.concatenate((toon_light_ary, toon_shadow_ary), axis=0)
                         toon_img = Image.fromarray(toon_ary.astype(np.uint8))
 
@@ -1138,18 +1438,41 @@ class VroidExportService():
                     else:
                         toon_sharing_flag = 1
                         toon_texture_index = 1
-                    
-                    target_material_names = material_name.split(' ')
-                    material_names = target_material_names[0].split('_')
-                    material_name_ja = '_'.join(material_names[-4:-2])
+
+                    target_material_names = material_name.split(" ")
+                    material_names = target_material_names[0].split("_")
+                    material_name_ja = "_".join(material_names[-4:-2])
                     if material_names[-1].isdecimal():
                         # 末尾が数字である場合、末尾を入れる
-                        material_name_ja = '_'.join([material_names[-5], material_names[-4], material_names[-1]])
+                        material_name_ja = "_".join([material_names[-5], material_names[-4], material_names[-1]])
+                    if material_name_ja in registed_material_names:
+                        logger.warning(
+                            "既に同じ材質名が登録されているため、元の材質名のまま登録します 変換材質名: %s 元材質名: %s", material_name_ja, material_name,
+                            decoration=MLogger.DECORATION_BOX
+                        )
+                        material_name_ja = target_material_names[0]
 
                     # 材質日本語名は部分抽出
-                    material = Material(material_name_ja, material_name, diffuse_color, alpha, specular_factor, specular_color, \
-                                        ambient_color, flag, edge_color, edge_size, texture_index, sphere_texture_index, sphere_mode, toon_sharing_flag, \
-                                        toon_texture_index, "", 0)
+                    material = Material(
+                        material_name_ja,
+                        material_name,
+                        diffuse_color,
+                        alpha,
+                        specular_factor,
+                        specular_color,
+                        ambient_color,
+                        flag,
+                        edge_color,
+                        edge_size,
+                        texture_index,
+                        sphere_texture_index,
+                        sphere_mode,
+                        toon_sharing_flag,
+                        toon_texture_index,
+                        "",
+                        0,
+                    )
+                    registed_material_names.append(material_name_ja)
                     materials_by_type[material_key][material_name] = material
                     indices_by_materials[material_name] = {}
                 else:
@@ -1160,11 +1483,22 @@ class VroidExportService():
                 indices_by_materials[material_name][index_accessor] = (np.array(indices) + start_vidx).tolist()
                 material.vertex_count += len(indices)
 
-                logger.info('-- 面・材質データ解析[%s-%s]', index_accessor, material_accessor)
-        
+                logger.info("-- 面・材質データ解析[%s-%s]", index_accessor, material_accessor)
+
         # 材質を不透明(OPAQUE)右透明順(BLEND)に並べ替て設定
         index_idx = 0
-        for material_type in ["OPAQUE", "MASK", "BLEND", "FaceBrow", "Eyeline", "Eyelash", "EyeWhite", "EyeIris", "EyeHighlight", "Lens"]:
+        for material_type in [
+            "OPAQUE",
+            "MASK",
+            "BLEND",
+            "FaceBrow",
+            "Eyeline",
+            "Eyelash",
+            "EyeWhite",
+            "EyeIris",
+            "EyeHighlight",
+            "Lens",
+        ]:
             if material_type in materials_by_type:
                 for material_name, material in materials_by_type[material_type].items():
                     model.materials[material_name] = material
@@ -1186,19 +1520,19 @@ class VroidExportService():
 
                     append_materials = None
                     if material_type == "EyeIris":
-                        append_materials = [('eye_star', '星', 'Star'), ('eye_heart', 'ハート', 'Heart')]
+                        append_materials = [("eye_star", "星", "Star"), ("eye_heart", "ハート", "Heart")]
                     elif "_Face_" in material.english_name:
-                        append_materials = [('cheek_dye', '頬染め', 'Cheek_dye')]
+                        append_materials = [("cheek_dye", "頬染め", "Cheek_dye")]
 
                     if append_materials:
                         # 目材質追加
                         for tex_name, mat_suffix, mat_suffix_english in append_materials:
-                            shutil.copy(MFileUtils.resource_path(f'src/resources/{tex_name}.png'), tex_dir_path)
-                            model.textures.append(os.path.join("tex", f'{tex_name}.png'))
+                            shutil.copy(MFileUtils.resource_path(f"src/resources/{tex_name}.png"), tex_dir_path)
+                            model.textures.append(os.path.join("tex", f"{tex_name}.png"))
 
                             add_material = copy.deepcopy(material)
-                            add_material.name = f'{material.name}_{mat_suffix}'
-                            add_material.english_name = f'{material_name}_{mat_suffix_english}'
+                            add_material.name = f"{material.name}_{mat_suffix}"
+                            add_material.english_name = f"{material_name}_{mat_suffix_english}"
                             add_material.texture_index = len(model.textures) - 1
                             add_material.alpha = 0
                             model.materials[add_material.name] = add_material
@@ -1222,8 +1556,17 @@ class VroidExportService():
         logger.info("-- 頂点・面・材質データ解析終了")
 
         return model
-    
-    def get_deform_index(self, vertex_idx: int, model: PmxModel, vertex_pos: MVector3D, joint: MVector4D, skin_joints: list, node_weight: list, bone_name_dict: dict):
+
+    def get_deform_index(
+        self,
+        vertex_idx: int,
+        model: PmxModel,
+        vertex_pos: MVector3D,
+        joint: MVector4D,
+        skin_joints: list,
+        node_weight: list,
+        bone_name_dict: dict,
+    ):
         # まずは0じゃないデータ（何かしら有効なボーンINDEXがあるリスト）
         valiable_joints = np.where(joint.data() > 0)[0].tolist()
         # ウェイト
@@ -1234,8 +1577,8 @@ class VroidExportService():
         dest_joint_list = []
         for jidx in org_joint_idxs.tolist():
             for node_name, bone_param in bone_name_dict.items():
-                if bone_param['node_index'] == skin_joints[jidx]:
-                    dest_joint_list.append(model.bones[bone_param['name']].index)
+                if bone_param["node_index"] == skin_joints[jidx]:
+                    dest_joint_list.append(model.bones[bone_param["name"]].index)
         dest_joints = np.array(dest_joint_list)
 
         # 腰は下半身に統合
@@ -1273,40 +1616,58 @@ class VroidExportService():
 
         for direction in ["右", "左"]:
             # 足・ひざ・足首・つま先はそれぞれDに載せ替え
-            for dest_bone_name, src_bone_name in [(f'{direction}足', f'{direction}足D'), (f'{direction}ひざ', f'{direction}ひざD'), \
-                                                  (f'{direction}足首', f'{direction}足首D'), (f'{direction}つま先', f'{direction}足先EX')]:
-                dest_joints = np.where(dest_joints == model.bones[dest_bone_name].index, model.bones[src_bone_name].index, dest_joints)
+            for dest_bone_name, src_bone_name in [
+                (f"{direction}足", f"{direction}足D"),
+                (f"{direction}ひざ", f"{direction}ひざD"),
+                (f"{direction}足首", f"{direction}足首D"),
+                (f"{direction}つま先", f"{direction}足先EX"),
+            ]:
+                dest_joints = np.where(
+                    dest_joints == model.bones[dest_bone_name].index, model.bones[src_bone_name].index, dest_joints
+                )
 
-            for base_from_name, base_to_name, base_twist_name in [('腕', 'ひじ', '腕捩'), ('ひじ', '手首', '手捩')]:
-                dest_arm_bone_name = f'{direction}{base_from_name}'
-                dest_elbow_bone_name = f'{direction}{base_to_name}'
-                dest_arm_twist1_bone_name = f'{direction}{base_twist_name}1'
-                dest_arm_twist2_bone_name = f'{direction}{base_twist_name}2'
-                dest_arm_twist3_bone_name = f'{direction}{base_twist_name}3'
+            for base_from_name, base_to_name, base_twist_name in [("腕", "ひじ", "腕捩"), ("ひじ", "手首", "手捩")]:
+                dest_arm_bone_name = f"{direction}{base_from_name}"
+                dest_elbow_bone_name = f"{direction}{base_to_name}"
+                dest_arm_twist1_bone_name = f"{direction}{base_twist_name}1"
+                dest_arm_twist2_bone_name = f"{direction}{base_twist_name}2"
+                dest_arm_twist3_bone_name = f"{direction}{base_twist_name}3"
 
                 arm_elbow_distance = -1
                 vector_arm_distance = 1
 
                 # 腕捩に分散する
-                if model.bones[dest_arm_bone_name].index in dest_joints or model.bones[dest_arm_twist1_bone_name].index in dest_joints \
-                   or model.bones[dest_arm_twist2_bone_name].index in dest_joints or model.bones[dest_arm_twist3_bone_name].index in dest_joints:
+                if (
+                    model.bones[dest_arm_bone_name].index in dest_joints
+                    or model.bones[dest_arm_twist1_bone_name].index in dest_joints
+                    or model.bones[dest_arm_twist2_bone_name].index in dest_joints
+                    or model.bones[dest_arm_twist3_bone_name].index in dest_joints
+                ):
                     # 腕に割り当てられているウェイトの場合
-                    arm_elbow_distance = model.bones[dest_elbow_bone_name].position.x() - model.bones[dest_arm_bone_name].position.x()
+                    arm_elbow_distance = (
+                        model.bones[dest_elbow_bone_name].position.x() - model.bones[dest_arm_bone_name].position.x()
+                    )
                     vector_arm_distance = vertex_pos.x() - model.bones[dest_arm_bone_name].position.x()
-                    twist_list = [(dest_arm_twist1_bone_name, dest_arm_bone_name), \
-                                  (dest_arm_twist2_bone_name, dest_arm_twist1_bone_name), \
-                                  (dest_arm_twist3_bone_name, dest_arm_twist2_bone_name)]
+                    twist_list = [
+                        (dest_arm_twist1_bone_name, dest_arm_bone_name),
+                        (dest_arm_twist2_bone_name, dest_arm_twist1_bone_name),
+                        (dest_arm_twist3_bone_name, dest_arm_twist2_bone_name),
+                    ]
 
                 if np.sign(arm_elbow_distance) == np.sign(vector_arm_distance):
                     for dest_to_bone_name, dest_from_bone_name in twist_list:
                         # 腕からひじの間の頂点の場合
-                        twist_distance = model.bones[dest_to_bone_name].position.x() - model.bones[dest_from_bone_name].position.x()
+                        twist_distance = (
+                            model.bones[dest_to_bone_name].position.x() - model.bones[dest_from_bone_name].position.x()
+                        )
                         vector_distance = vertex_pos.x() - model.bones[dest_from_bone_name].position.x()
                         if np.sign(twist_distance) == np.sign(vector_distance):
                             # 腕から腕捩1の間にある頂点の場合
                             arm_twist_factor = vector_distance / twist_distance
                             # 腕が割り当てられているウェイトINDEX
-                            arm_twist_weight_joints = np.where(dest_joints == model.bones[dest_from_bone_name].index)[0]
+                            arm_twist_weight_joints = np.where(dest_joints == model.bones[dest_from_bone_name].index)[
+                                0
+                            ]
                             if len(arm_twist_weight_joints) > 0:
                                 if arm_twist_factor > 1:
                                     # 範囲より先の場合
@@ -1328,8 +1689,15 @@ class VroidExportService():
                                     dest_joints = np.append(dest_joints, model.bones[dest_to_bone_name].index)
                                     org_weights = np.append(org_weights, arm_twist_weights)
 
-                                    logger.test("[%s] from: %s, to: %s, factor: %s, dest_joints: %s, org_weights: %s", \
-                                                vertex_idx, dest_from_bone_name, dest_to_bone_name, arm_twist_factor, dest_joints, org_weights)
+                                    logger.test(
+                                        "[%s] from: %s, to: %s, factor: %s, dest_joints: %s, org_weights: %s",
+                                        vertex_idx,
+                                        dest_from_bone_name,
+                                        dest_to_bone_name,
+                                        arm_twist_factor,
+                                        dest_joints,
+                                        org_weights,
+                                    )
 
         # 載せ替えた事で、ジョイントが重複している場合があるので、調整する
         joint_weights = {}
@@ -1361,7 +1729,7 @@ class VroidExportService():
         return joint_values, weight_values
 
     def convert_bone(self, model: PmxModel):
-        if 'nodes' not in model.json_data:
+        if "nodes" not in model.json_data:
             logger.error("変換可能なボーン情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
             return None, None
 
@@ -1374,103 +1742,124 @@ class VroidExportService():
 
         node_dict = {}
         node_name_dict = {}
-        for nidx, node in enumerate(model.json_data['nodes']):
-            if 'translation' not in node:
+        for nidx, node in enumerate(model.json_data["nodes"]):
+            if "translation" not in node:
                 continue
-            
-            node = model.json_data['nodes'][nidx]
-            logger.debug(f'[{nidx:03d}] node: {node}')
 
-            node_name = node['name']
-            
+            node = model.json_data["nodes"][nidx]
+            logger.debug(f"[{nidx:03d}] node: {node}")
+
+            node_name = node["name"]
+
             # 位置
-            position = MVector3D(*node['translation']) * MIKU_METER * MVector3D(-1, 1, 1)
+            position = MVector3D(*node["translation"]) * MIKU_METER * MVector3D(-1, 1, 1)
 
-            children = node['children'] if 'children' in node else []
+            children = node["children"] if "children" in node else []
 
-            node_dict[nidx] = {'name': node_name, 'relative_position': position, 'position': position, 'parent': -1, 'children': children}
+            node_dict[nidx] = {
+                "name": node_name,
+                "relative_position": position,
+                "position": position,
+                "parent": -1,
+                "children": children,
+            }
             node_name_dict[node_name] = nidx
 
         # 親子関係設定
         for nidx, node_param in node_dict.items():
             for midx, parent_node_param in node_dict.items():
-                if nidx in parent_node_param['children']:
-                    node_dict[nidx]['parent'] = midx
-        
+                if nidx in parent_node_param["children"]:
+                    node_dict[nidx]["parent"] = midx
+
         # 絶対位置計算
         for nidx, node_param in node_dict.items():
-            node_dict[nidx]['position'] = self.calc_bone_position(model, node_dict, node_param)
-        
+            node_dict[nidx]["position"] = self.calc_bone_position(model, node_dict, node_param)
+
         # まずは人体ボーン
         bone_name_dict = {}
         for node_name, bone_param in BONE_PAIRS.items():
-            parent_name = BONE_PAIRS[bone_param['parent']]['name'] if bone_param['parent'] else None
+            parent_name = BONE_PAIRS[bone_param["parent"]]["name"] if bone_param["parent"] else None
             parent_index = model.bones[parent_name].index if parent_name else -1
 
             node_index = -1
             position = MVector3D()
-            bone = Bone(bone_param['name'], node_name, position, parent_index, 0, bone_param['flag'])
+            bone = Bone(bone_param["name"], node_name, position, parent_index, 0, bone_param["flag"])
             if parent_index >= 0:
                 if node_name in node_name_dict:
                     node_index = node_name_dict[node_name]
-                    position = node_dict[node_name_dict[node_name]]['position'].copy()
-                elif node_name == 'Center':
-                    position = node_dict[node_name_dict['J_Bip_C_Hips']]['position'] * 0.7
-                elif node_name == 'Groove':
-                    position = node_dict[node_name_dict['J_Bip_C_Hips']]['position'] * 0.8
-                elif node_name == 'J_Bip_C_Spine2':
-                    position = node_dict[node_name_dict['J_Bip_C_Spine']]['position'].copy()
-                elif node_name == 'J_Adj_FaceEye':
-                    position = node_dict[node_name_dict['J_Adj_L_FaceEye']]['position'] + \
-                                ((node_dict[node_name_dict['J_Adj_R_FaceEye']]['position'] - node_dict[node_name_dict['J_Adj_L_FaceEye']]['position']) * 0.5)   # noqa
-                elif 'shoulderP_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_Shoulder']]['position'].copy()
-                elif 'shoulderC_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_UpperArm']]['position'].copy()
-                    bone.effect_index = bone_name_dict[f'shoulderP_{node_name[-1]}']['index']
+                    position = node_dict[node_name_dict[node_name]]["position"].copy()
+                elif node_name == "Center":
+                    position = node_dict[node_name_dict["J_Bip_C_Hips"]]["position"] * 0.7
+                elif node_name == "Groove":
+                    position = node_dict[node_name_dict["J_Bip_C_Hips"]]["position"] * 0.8
+                elif node_name == "J_Bip_C_Spine2":
+                    position = node_dict[node_name_dict["J_Bip_C_Spine"]]["position"].copy()
+                elif node_name == "J_Adj_FaceEye":
+                    position = node_dict[node_name_dict["J_Adj_L_FaceEye"]]["position"] + (
+                        (
+                            node_dict[node_name_dict["J_Adj_R_FaceEye"]]["position"]
+                            - node_dict[node_name_dict["J_Adj_L_FaceEye"]]["position"]
+                        )
+                        * 0.5
+                    )  # noqa
+                elif "shoulderP_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Shoulder"]]["position"].copy()
+                elif "shoulderC_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperArm"]]["position"].copy()
+                    bone.effect_index = bone_name_dict[f"shoulderP_{node_name[-1]}"]["index"]
                     bone.effect_factor = -1
-                elif 'arm_twist_' in node_name:
-                    factor = 0.25 if node_name[-2] == '1' else 0.75 if node_name[-2] == '3' else 0.5
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_UpperArm']]['position'] + \
-                                ((node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_LowerArm']]['position'] - node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_UpperArm']]['position']) * factor)   # noqa
-                    if node_name[-2] in ['1', '2', '3']:
-                        bone.effect_index = bone_name_dict[f'arm_twist_{node_name[-1]}']['index']
+                elif "arm_twist_" in node_name:
+                    factor = 0.25 if node_name[-2] == "1" else 0.75 if node_name[-2] == "3" else 0.5
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperArm"]]["position"] + (
+                        (
+                            node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_LowerArm"]]["position"]
+                            - node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperArm"]]["position"]
+                        )
+                        * factor
+                    )  # noqa
+                    if node_name[-2] in ["1", "2", "3"]:
+                        bone.effect_index = bone_name_dict[f"arm_twist_{node_name[-1]}"]["index"]
                         bone.effect_factor = factor
-                elif 'wrist_twist_' in node_name:
-                    factor = 0.25 if node_name[-2] == '1' else 0.75 if node_name[-2] == '3' else 0.5
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_LowerArm']]['position'] + \
-                                ((node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_Hand']]['position'] - node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_LowerArm']]['position']) * factor)   # noqa
-                    if node_name[-2] in ['1', '2', '3']:
-                        bone.effect_index = bone_name_dict[f'wrist_twist_{node_name[-1]}']['index']
+                elif "wrist_twist_" in node_name:
+                    factor = 0.25 if node_name[-2] == "1" else 0.75 if node_name[-2] == "3" else 0.5
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_LowerArm"]]["position"] + (
+                        (
+                            node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Hand"]]["position"]
+                            - node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_LowerArm"]]["position"]
+                        )
+                        * factor
+                    )  # noqa
+                    if node_name[-2] in ["1", "2", "3"]:
+                        bone.effect_index = bone_name_dict[f"wrist_twist_{node_name[-1]}"]["index"]
                         bone.effect_factor = factor
-                elif 'waistCancel_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_UpperLeg']]['position'].copy()
-                    bone.effect_index = bone_name_dict['J_Bip_C_Hips']['index']
+                elif "waistCancel_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperLeg"]]["position"].copy()
+                    bone.effect_index = bone_name_dict["J_Bip_C_Hips"]["index"]
                     bone.effect_factor = -1
-                elif 'leg_IK_Parent_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_Foot']]['position'].copy()
+                elif "leg_IK_Parent_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Foot"]]["position"].copy()
                     position.setY(0)
-                elif 'leg_IK_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_Foot']]['position'].copy()
-                elif 'toe_IK_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_ToeBase']]['position'].copy()
-                elif 'leg_D_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_UpperLeg']]['position'].copy()
-                    bone.effect_index = bone_name_dict[f'J_Bip_{node_name[-1]}_UpperLeg']['index']
+                elif "leg_IK_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Foot"]]["position"].copy()
+                elif "toe_IK_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_ToeBase"]]["position"].copy()
+                elif "leg_D_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_UpperLeg"]]["position"].copy()
+                    bone.effect_index = bone_name_dict[f"J_Bip_{node_name[-1]}_UpperLeg"]["index"]
                     bone.effect_factor = 1
                     bone.layer = 1
-                elif 'knee_D_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_LowerLeg']]['position'].copy()
-                    bone.effect_index = bone_name_dict[f'J_Bip_{node_name[-1]}_LowerLeg']['index']
+                elif "knee_D_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_LowerLeg"]]["position"].copy()
+                    bone.effect_index = bone_name_dict[f"J_Bip_{node_name[-1]}_LowerLeg"]["index"]
                     bone.effect_factor = 1
                     bone.layer = 1
-                elif 'ankle_D_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_Foot']]['position'].copy()
-                    bone.effect_index = bone_name_dict[f'J_Bip_{node_name[-1]}_Foot']['index']
+                elif "ankle_D_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_Foot"]]["position"].copy()
+                    bone.effect_index = bone_name_dict[f"J_Bip_{node_name[-1]}_Foot"]["index"]
                     bone.effect_factor = 1
                     bone.layer = 1
-                elif 'toe_EX_' in node_name:
-                    position = node_dict[node_name_dict[f'J_Bip_{node_name[-1]}_ToeBase']]['position'].copy()
+                elif "toe_EX_" in node_name:
+                    position = node_dict[node_name_dict[f"J_Bip_{node_name[-1]}_ToeBase"]]["position"].copy()
                     bone.layer = 1
             bone.position = position
             bone.index = len(model.bones)
@@ -1478,12 +1867,19 @@ class VroidExportService():
             # 表示枠
             if bone_param["display"]:
                 if bone_param["display"] not in model.display_slots:
-                    model.display_slots[bone_param["display"]] = DisplaySlot(bone_param["display"], bone_param["display"], 0, 0)
+                    model.display_slots[bone_param["display"]] = DisplaySlot(
+                        bone_param["display"], bone_param["display"], 0, 0
+                    )
                 model.display_slots[bone_param["display"]].references.append((0, bone.index))
 
             model.bones[bone.name] = bone
-            bone_name_dict[node_name] = {'index': bone.index, 'name': bone.name, 'node_name': node_name, 'node_index': node_index}
-        
+            bone_name_dict[node_name] = {
+                "index": bone.index,
+                "name": bone.name,
+                "node_name": node_name,
+                "node_index": node_index,
+            }
+
         if "髪" not in model.display_slots:
             model.display_slots["髪"] = DisplaySlot("髪", "Hair", 0, 0)
         if "その他" not in model.display_slots:
@@ -1493,50 +1889,85 @@ class VroidExportService():
         hair_blocks = []
         other_blocks = []
         for nidx, node_param in node_dict.items():
-            if node_param['name'] not in bone_name_dict:
-                bone = Bone(node_param['name'], node_param['name'], node_param['position'], -1, 0, 0x0002)
-                parent_index = bone_name_dict[node_dict[node_param['parent']]['name']]['index'] \
-                    if node_param['parent'] in node_dict and node_dict[node_param['parent']]['name'] in bone_name_dict else -1
+            if node_param["name"] not in bone_name_dict:
+                bone = Bone(node_param["name"], node_param["name"], node_param["position"], -1, 0, 0x0002)
+                parent_index = (
+                    bone_name_dict[node_dict[node_param["parent"]]["name"]]["index"]
+                    if node_param["parent"] in node_dict and node_dict[node_param["parent"]]["name"] in bone_name_dict
+                    else -1
+                )
                 bone.parent_index = parent_index
                 bone.index = len(model.bones)
-                
-                if node_param['name'] not in DISABLE_BONES:
+
+                if node_param["name"] not in DISABLE_BONES:
                     # 1.4.1でボーン名が短くなったのでそれに合わせて調整
-                    node_names = node_param['name'].split('_') if "Hair" in node_param['name'] else node_param['name'].split('_Sec_') \
-                        if '_Sec_' in node_param['name'] else node_param['name'].split('J_')
+                    node_names = (
+                        node_param["name"].split("_")
+                        if "Hair" in node_param["name"]
+                        else node_param["name"].split("_Sec_")
+                        if "_Sec_" in node_param["name"]
+                        else node_param["name"].split("J_")
+                    )
                     bone_block = None
                     bone_name = None
 
-                    if "Hair" in node_param['name']:
+                    if "Hair" in node_param["name"]:
                         if len(hair_blocks) == 0:
                             bone_block = {"bone_block_name": "髪", "bone_block_size": 1, "size": 1}
                         else:
-                            bone_block = {"bone_block_name": "髪", "bone_block_size": hair_blocks[-1]["bone_block_size"], "size": hair_blocks[-1]["size"] + 1}
+                            bone_block = {
+                                "bone_block_name": "髪",
+                                "bone_block_size": hair_blocks[-1]["bone_block_size"],
+                                "size": hair_blocks[-1]["size"] + 1,
+                            }
                         hair_blocks.append(bone_block)
                     else:
                         if len(other_blocks) == 0:
                             bone_block = {"bone_block_name": "装飾", "bone_block_size": 1, "size": 1}
                         else:
-                            bone_block = {"bone_block_name": "装飾", "bone_block_size": other_blocks[-1]["bone_block_size"], "size": other_blocks[-1]["size"] + 1}
+                            bone_block = {
+                                "bone_block_name": "装飾",
+                                "bone_block_size": other_blocks[-1]["bone_block_size"],
+                                "size": other_blocks[-1]["size"] + 1,
+                            }
                         other_blocks.append(bone_block)
-                    bone_name = f'{bone_block["bone_block_name"]}_{bone_block["bone_block_size"]:02d}-{bone_block["size"]:02d}'
+                    bone_name = (
+                        f'{bone_block["bone_block_name"]}_{bone_block["bone_block_size"]:02d}-{bone_block["size"]:02d}'
+                    )
 
-                    if "Hair" not in node_param['name'] and len(node_names) > 1:
+                    if "Hair" not in node_param["name"] and len(node_names) > 1:
                         # 装飾の場合、末尾を入れる
-                        bone_name += node_param['name'][len(node_names[0]):]
+                        bone_name += node_param["name"][len(node_names[0]) :]
 
                     bone.name = bone_name
 
                 model.bones[bone.name] = bone
-                bone_name_dict[node_param['name']] = {'index': bone.index, 'name': bone.name, 'node_name': node_param['name'], 'node_index': node_name_dict[node_param['name']]}
+                bone_name_dict[node_param["name"]] = {
+                    "index": bone.index,
+                    "name": bone.name,
+                    "node_name": node_param["name"],
+                    "node_index": node_name_dict[node_param["name"]],
+                }
 
-                if node_param['name'] not in DISABLE_BONES:
-                    if len(node_param['children']) == 0:
+                if node_param["name"] not in DISABLE_BONES:
+                    if len(node_param["children"]) == 0:
                         # 末端の場合次ボーンで段を変える(加算用にsizeは0)
-                        if "Hair" in node_param['name']:
-                            hair_blocks.append({"bone_block_name": "髪", "bone_block_size": hair_blocks[-1]["bone_block_size"] + 1, "size": 0})
+                        if "Hair" in node_param["name"]:
+                            hair_blocks.append(
+                                {
+                                    "bone_block_name": "髪",
+                                    "bone_block_size": hair_blocks[-1]["bone_block_size"] + 1,
+                                    "size": 0,
+                                }
+                            )
                         else:
-                            other_blocks.append({"bone_block_name": "装飾", "bone_block_size": other_blocks[-1]["bone_block_size"] + 1, "size": 0})
+                            other_blocks.append(
+                                {
+                                    "bone_block_name": "装飾",
+                                    "bone_block_size": other_blocks[-1]["bone_block_size"] + 1,
+                                    "size": 0,
+                                }
+                            )
 
         # ローカル軸・IK設定
         for bone in model.bones.values():
@@ -1545,50 +1976,68 @@ class VroidExportService():
             # 人体ボーン
             if bone.english_name in BONE_PAIRS:
                 # 表示先
-                tail = BONE_PAIRS[bone.english_name]['tail']
+                tail = BONE_PAIRS[bone.english_name]["tail"]
                 if tail:
                     if type(tail) is MVector3D:
                         bone.tail_position = tail.copy()
                     else:
-                        bone.tail_index = bone_name_dict[tail]['index']
-                if bone.name == '下半身':
+                        bone.tail_index = bone_name_dict[tail]["index"]
+                if bone.name == "下半身":
                     # 腰は表示順が上なので、相対指定
-                    bone.tail_position = model.bones['腰'].position - bone.position
+                    bone.tail_position = model.bones["腰"].position - bone.position
 
                 direction = bone.name[0]
 
                 # 足IK
-                leg_name = f'{direction}足'
-                knee_name = f'{direction}ひざ'
-                ankle_name = f'{direction}足首'
-                toe_name = f'{direction}つま先'
+                leg_name = f"{direction}足"
+                knee_name = f"{direction}ひざ"
+                ankle_name = f"{direction}足首"
+                toe_name = f"{direction}つま先"
 
-                if bone.name in ['右足ＩＫ', '左足ＩＫ'] and leg_name in model.bones and knee_name in model.bones and ankle_name in model.bones:
+                if (
+                    bone.name in ["右足ＩＫ", "左足ＩＫ"]
+                    and leg_name in model.bones
+                    and knee_name in model.bones
+                    and ankle_name in model.bones
+                ):
                     leg_ik_link = []
-                    leg_ik_link.append(IkLink(model.bones[knee_name].index, 1, MVector3D(math.radians(-180), 0, 0), MVector3D(math.radians(-0.5), 0, 0)))
+                    leg_ik_link.append(
+                        IkLink(
+                            model.bones[knee_name].index,
+                            1,
+                            MVector3D(math.radians(-180), 0, 0),
+                            MVector3D(math.radians(-0.5), 0, 0),
+                        )
+                    )
                     leg_ik_link.append(IkLink(model.bones[leg_name].index, 0))
                     leg_ik = Ik(model.bones[ankle_name].index, 40, 1, leg_ik_link)
                     bone.ik = leg_ik
 
-                if bone.name in ['右つま先ＩＫ', '左つま先ＩＫ'] and ankle_name in model.bones and toe_name in model.bones:
+                if bone.name in ["右つま先ＩＫ", "左つま先ＩＫ"] and ankle_name in model.bones and toe_name in model.bones:
                     toe_ik_link = []
                     toe_ik_link.append(IkLink(model.bones[ankle_name].index, 0))
                     toe_ik = Ik(model.bones[toe_name].index, 40, 1, toe_ik_link)
                     bone.ik = toe_ik
 
-                if bone.name in ['右目', '左目'] and '両目' in model.bones:
+                if bone.name in ["右目", "左目"] and "両目" in model.bones:
                     bone.flag |= 0x0100
-                    bone.effect_index = model.bones['両目'].index
+                    bone.effect_index = model.bones["両目"].index
                     bone.effect_factor = 0.3
             else:
                 # 人体以外
                 # 表示先
                 node_param = node_dict[node_name_dict[bone.english_name]]
-                tail_index = bone_name_dict[node_dict[node_param['children'][0]]['name']]['index'] if node_param['children'] and node_param['children'][0] in node_dict and node_dict[node_param['children'][0]]['name'] in bone_name_dict else -1   # noqa
+                tail_index = (
+                    bone_name_dict[node_dict[node_param["children"][0]]["name"]]["index"]
+                    if node_param["children"]
+                    and node_param["children"][0] in node_dict
+                    and node_dict[node_param["children"][0]]["name"] in bone_name_dict
+                    else -1
+                )  # noqa
                 if tail_index >= 0:
                     bone.tail_index = tail_index
                     bone.flag |= 0x0001 | 0x0008 | 0x0010
-                elif 'Glasses' in bone.name:
+                elif "Glasses" in bone.name:
                     # メガネは単体で操作可能(+移動)
                     bone.flag |= 0x0004 | 0x0008 | 0x0010
 
@@ -1601,12 +2050,14 @@ class VroidExportService():
         logger.info("-- ボーンデータ解析終了")
 
         return model, bone_name_dict
-    
-    def calc_bone_position(self, model: PmxModel, node_dict: dict, node_param: dict):
-        if node_param['parent'] == -1:
-            return node_param['relative_position']
 
-        return node_param['relative_position'] + self.calc_bone_position(model, node_dict, node_dict[node_param['parent']])
+    def calc_bone_position(self, model: PmxModel, node_dict: dict, node_param: dict):
+        if node_param["parent"] == -1:
+            return node_param["relative_position"]
+
+        return node_param["relative_position"] + self.calc_bone_position(
+            model, node_dict, node_dict[node_param["parent"]]
+        )
 
     def create_model(self):
         model = PmxModel()
@@ -1632,37 +2083,51 @@ class VroidExportService():
             json_text = self.read_text(json_buf_size)
 
             model.json_data = json.loads(json_text)
-            
+
             # JSON出力
-            jf = open(os.path.join(glft_dir_path, "gltf.json"), "w", encoding='utf-8')
-            json.dump(model.json_data, jf, ensure_ascii=False, indent=4, sort_keys=True, separators=(',', ': '))
+            jf = open(os.path.join(glft_dir_path, "gltf.json"), "w", encoding="utf-8")
+            json.dump(model.json_data, jf, ensure_ascii=False, indent=4, sort_keys=True, separators=(",", ": "))
             logger.info("-- JSON出力終了")
 
-            if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'exporterVersion' not in model.json_data['extensions']['VRM']:
+            if (
+                "extensions" not in model.json_data
+                or "VRM" not in model.json_data["extensions"]
+                or "exporterVersion" not in model.json_data["extensions"]["VRM"]
+            ):
                 logger.error("出力ソフト情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
                 return None, None, None
 
-            if "extensions" not in model.json_data or 'VRM' not in model.json_data['extensions'] or 'meta' not in model.json_data['extensions']['VRM']:
+            if (
+                "extensions" not in model.json_data
+                or "VRM" not in model.json_data["extensions"]
+                or "meta" not in model.json_data["extensions"]["VRM"]
+            ):
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
                 return None, None, None
 
-            if "VRoidStudio-0." in model.json_data['extensions']['VRM']['exporterVersion']:
+            if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
                 # VRoid Studioベータ版はNG
-                logger.error("VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s", \
-                             model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
+                logger.error(
+                    "VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s",
+                    model.json_data["extensions"]["VRM"]["exporterVersion"],
+                    decoration=MLogger.DECORATION_BOX,
+                )
                 return None, None, None
 
-            if "VRoid Studio-1." not in model.json_data['extensions']['VRM']['exporterVersion']:
+            if "VRoid Studio-1." not in model.json_data["extensions"]["VRM"]["exporterVersion"]:
                 # VRoid Studio正式版じゃなくても警告だけに留める
-                logger.warning("VRoid Studio 1.x で出力されたvrmデータではないため、結果がおかしくなる可能性があります。\n（結果がおかしくてもサポート対象外となります）\n出力元: %s", \
-                               model.json_data['extensions']['VRM']['exporterVersion'], decoration=MLogger.DECORATION_BOX)
+                logger.warning(
+                    "VRoid Studio 1.x で出力されたvrmデータではないため、結果がおかしくなる可能性があります。\n（結果がおかしくてもサポート対象外となります）\n出力元: %s",
+                    model.json_data["extensions"]["VRM"]["exporterVersion"],
+                    decoration=MLogger.DECORATION_BOX,
+                )
 
-            if 'title' in model.json_data['extensions']['VRM']['meta']:
-                model.name = model.json_data['extensions']['VRM']['meta']['title']
-                model.english_name = model.json_data['extensions']['VRM']['meta']['title']
+            if "title" in model.json_data["extensions"]["VRM"]["meta"]:
+                model.name = model.json_data["extensions"]["VRM"]["meta"]["title"]
+                model.english_name = model.json_data["extensions"]["VRM"]["meta"]["title"]
             if not model.name:
                 # titleにモデル名が入ってなかった場合、ファイル名を代理入力
-                file_name = os.path.basename(self.options.vrm_model.path).split('.')[0]
+                file_name = os.path.basename(self.options.vrm_model.path).split(".")[0]
                 model.name = file_name
                 model.english_name = file_name
 
@@ -1670,41 +2135,47 @@ class VroidExportService():
 
             model.comment += f"\r\n{logger.transtext('アバター情報')} -------\r\n"
 
-            if 'author' in model.json_data['extensions']['VRM']['meta']:
-                model.comment += f"{logger.transtext('作者')}: {model.json_data['extensions']['VRM']['meta']['author']}\r\n"
-            if 'contactInformation' in model.json_data['extensions']['VRM']['meta']:
+            if "author" in model.json_data["extensions"]["VRM"]["meta"]:
+                model.comment += (
+                    f"{logger.transtext('作者')}: {model.json_data['extensions']['VRM']['meta']['author']}\r\n"
+                )
+            if "contactInformation" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('連絡先')}: {model.json_data['extensions']['VRM']['meta']['contactInformation']}\r\n"
-            if 'reference' in model.json_data['extensions']['VRM']['meta']:
-                model.comment += f"{logger.transtext('参照')}: {model.json_data['extensions']['VRM']['meta']['reference']}\r\n"
-            if 'version' in model.json_data['extensions']['VRM']['meta']:
-                model.comment += f"{logger.transtext('バージョン')}: {model.json_data['extensions']['VRM']['meta']['version']}\r\n"
+            if "reference" in model.json_data["extensions"]["VRM"]["meta"]:
+                model.comment += (
+                    f"{logger.transtext('参照')}: {model.json_data['extensions']['VRM']['meta']['reference']}\r\n"
+                )
+            if "version" in model.json_data["extensions"]["VRM"]["meta"]:
+                model.comment += (
+                    f"{logger.transtext('バージョン')}: {model.json_data['extensions']['VRM']['meta']['version']}\r\n"
+                )
 
             model.comment += f"\r\n{logger.transtext('アバターの人格に関する許諾範囲')} -------\r\n"
 
-            if 'allowedUserName' in model.json_data['extensions']['VRM']['meta']:
+            if "allowedUserName" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('アバターに人格を与えることの許諾範囲')}: {model.json_data['extensions']['VRM']['meta']['allowedUserName']}\r\n"
-            if 'violentUssageName' in model.json_data['extensions']['VRM']['meta']:
+            if "violentUssageName" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('このアバターを用いて暴力表現を演じることの許可')}: {model.json_data['extensions']['VRM']['meta']['violentUssageName']}\r\n"
-            if 'sexualUssageName' in model.json_data['extensions']['VRM']['meta']:
+            if "sexualUssageName" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('このアバターを用いて性的表現を演じることの許可')}: {model.json_data['extensions']['VRM']['meta']['sexualUssageName']}\r\n"
-            if 'commercialUssageName' in model.json_data['extensions']['VRM']['meta']:
+            if "commercialUssageName" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('商用利用の許可')}: {model.json_data['extensions']['VRM']['meta']['commercialUssageName']}\r\n"
-            if 'otherPermissionUrl' in model.json_data['extensions']['VRM']['meta']:
+            if "otherPermissionUrl" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('その他のライセンス条件')}: {model.json_data['extensions']['VRM']['meta']['otherPermissionUrl']}\r\n"
 
             model.comment += f"\r\n{logger.transtext('再配布・改変に関する許諾範囲')} -------\r\n"
 
-            if 'licenseName' in model.json_data['extensions']['VRM']['meta']:
+            if "licenseName" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('ライセンスタイプ')}: {model.json_data['extensions']['VRM']['meta']['licenseName']}\r\n"
-            if 'otherPermissionUrl' in model.json_data['extensions']['VRM']['meta']:
+            if "otherPermissionUrl" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.comment += f"{logger.transtext('その他のライセンス条件')}: {model.json_data['extensions']['VRM']['meta']['otherPermissionUrl']}\r\n"
 
             # binデータ
             bin_buf_size = self.unpack(8, "L")
-            logger.debug(f'bin_buf_size: {bin_buf_size}')
+            logger.debug(f"bin_buf_size: {bin_buf_size}")
 
             with open(os.path.join(glft_dir_path, "data.bin"), "wb") as bf:
-                bf.write(self.buffer[self.offset:(self.offset + bin_buf_size)])
+                bf.write(self.buffer[self.offset : (self.offset + bin_buf_size)])
 
             # 空値をスフィア用に登録
             model.textures.append("")
@@ -1715,9 +2186,9 @@ class VroidExportService():
 
             # jsonデータの中に画像データの指定がある場合
             image_offset = 0
-            for image in model.json_data['images']:
-                if int(image["bufferView"]) < len(model.json_data['bufferViews']):
-                    image_buffer = model.json_data['bufferViews'][int(image["bufferView"])]
+            for image in model.json_data["images"]:
+                if int(image["bufferView"]) < len(model.json_data["bufferViews"]):
+                    image_buffer = model.json_data["bufferViews"][int(image["bufferView"])]
                     # 画像の開始位置はオフセット分ずらす
                     image_start = self.offset + image_buffer["byteOffset"]
                     # 拡張子
@@ -1725,14 +2196,14 @@ class VroidExportService():
                     # 画像名
                     image_name = f"{image['name']}.{ext}"
                     with open(os.path.join(glft_dir_path, image_name), "wb") as ibf:
-                        ibf.write(self.buffer[image_start:(image_start + image_buffer["byteLength"])])
+                        ibf.write(self.buffer[image_start : (image_start + image_buffer["byteLength"])])
                     # オフセット加算
                     image_offset += image_buffer["byteLength"]
                     # PMXに追記
                     model.textures.append(os.path.join("tex", image_name))
                     # テクスチャコピー
                     shutil.copy(os.path.join(glft_dir_path, image_name), os.path.join(tex_dir_path, image_name))
-            
+
             logger.info("-- テクスチャデータ解析終了")
 
         return model, tex_dir_path, setting_dir_path
@@ -1742,20 +2213,20 @@ class VroidExportService():
     def read_from_accessor(self, model: PmxModel, accessor_idx: int):
         bresult = None
         aidx = 0
-        if accessor_idx < len(model.json_data['accessors']):
-            accessor = model.json_data['accessors'][accessor_idx]
-            acc_type = accessor['type']
-            if accessor['bufferView'] < len(model.json_data['bufferViews']):
-                buffer = model.json_data['bufferViews'][accessor['bufferView']]
-                logger.debug('accessor: %s, %s', accessor_idx, buffer)
-                if 'count' in accessor:
+        if accessor_idx < len(model.json_data["accessors"]):
+            accessor = model.json_data["accessors"][accessor_idx]
+            acc_type = accessor["type"]
+            if accessor["bufferView"] < len(model.json_data["bufferViews"]):
+                buffer = model.json_data["bufferViews"][accessor["bufferView"]]
+                logger.debug("accessor: %s, %s", accessor_idx, buffer)
+                if "count" in accessor:
                     bresult = []
                     if acc_type == "VEC3":
-                        buf_type, buf_num = self.define_buf_type(accessor['componentType'])
+                        buf_type, buf_num = self.define_buf_type(accessor["componentType"])
                         if accessor_idx % 10 == 0:
                             logger.info("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
-                        for n in range(accessor['count']):
+                        for n in range(accessor["count"]):
                             buf_start = self.offset + buffer["byteOffset"] + ((buf_num * 3) * n)
 
                             # Vec3 / float
@@ -1767,7 +2238,7 @@ class VroidExportService():
                                 bresult.append(MVector3D(float(xresult[0]), float(yresult[0]), float(zresult[0])))
                             else:
                                 bresult.append(MVector3D(int(xresult[0]), int(yresult[0]), int(zresult[0])))
-                            
+
                             aidx += 1
 
                             if aidx % 5000 == 0:
@@ -1776,11 +2247,11 @@ class VroidExportService():
                                 logger.test("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
                     elif acc_type == "VEC2":
-                        buf_type, buf_num = self.define_buf_type(accessor['componentType'])
+                        buf_type, buf_num = self.define_buf_type(accessor["componentType"])
                         if accessor_idx % 10 == 0:
                             logger.info("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
-                        for n in range(accessor['count']):
+                        for n in range(accessor["count"]):
                             buf_start = self.offset + buffer["byteOffset"] + ((buf_num * 2) * n)
 
                             # Vec3 / float
@@ -1788,7 +2259,7 @@ class VroidExportService():
                             yresult = struct.unpack_from(buf_type, self.buffer, buf_start + buf_num)
 
                             bresult.append(MVector2D(float(xresult[0]), float(yresult[0])))
-                            
+
                             aidx += 1
 
                             if aidx % 5000 == 0:
@@ -1797,11 +2268,11 @@ class VroidExportService():
                                 logger.test("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
                     elif acc_type == "VEC4":
-                        buf_type, buf_num = self.define_buf_type(accessor['componentType'])
+                        buf_type, buf_num = self.define_buf_type(accessor["componentType"])
                         if accessor_idx % 10 == 0:
                             logger.info("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
-                        for n in range(accessor['count']):
+                        for n in range(accessor["count"]):
                             buf_start = self.offset + buffer["byteOffset"] + ((buf_num * 4) * n)
 
                             # Vec3 / float
@@ -1811,10 +2282,16 @@ class VroidExportService():
                             wresult = struct.unpack_from(buf_type, self.buffer, buf_start + (buf_num * 3))
 
                             if buf_type == "f":
-                                bresult.append(MVector4D(float(xresult[0]), float(yresult[0]), float(zresult[0]), float(wresult[0])))
+                                bresult.append(
+                                    MVector4D(
+                                        float(xresult[0]), float(yresult[0]), float(zresult[0]), float(wresult[0])
+                                    )
+                                )
                             else:
-                                bresult.append(MVector4D(int(xresult[0]), int(yresult[0]), int(zresult[0]), int(wresult[0])))
-                            
+                                bresult.append(
+                                    MVector4D(int(xresult[0]), int(yresult[0]), int(zresult[0]), int(wresult[0]))
+                                )
+
                             aidx += 1
 
                             if aidx % 5000 == 0:
@@ -1823,11 +2300,11 @@ class VroidExportService():
                                 logger.test("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
                     elif acc_type == "SCALAR":
-                        buf_type, buf_num = self.define_buf_type(accessor['componentType'])
+                        buf_type, buf_num = self.define_buf_type(accessor["componentType"])
                         if accessor_idx % 10 == 0:
                             logger.info("-- -- Accessor[%s/%s/%s]", accessor_idx, acc_type, buf_type)
 
-                        for n in range(accessor['count']):
+                        for n in range(accessor["count"]):
                             buf_start = self.offset + buffer["byteOffset"] + (buf_num * n)
                             xresult = struct.unpack_from(buf_type, self.buffer, buf_start)
 
@@ -1835,7 +2312,7 @@ class VroidExportService():
                                 bresult.append(float(xresult[0]))
                             else:
                                 bresult.append(int(xresult[0]))
-                            
+
                             aidx += 1
 
                             if aidx % 5000 == 0:
@@ -1858,7 +2335,7 @@ class VroidExportService():
             return "i", 4
         elif componentType == 5125:
             return "I", 4
-        
+
         return "f", 4
 
     def read_text(self, format_size):
@@ -1887,237 +2364,1218 @@ def calc_ratio(ratio: float, oldmin: float, oldmax: float, newmin: float, newmax
 
 
 def randomname(n) -> str:
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
+    return "".join(random.choices(string.ascii_letters + string.digits, k=n))
 
 
 DISABLE_BONES = [
-    'Face',
-    'Body',
-    'Hair',
-    'Hairs',
-    'Hair001',
-    'secondary',
+    "Face",
+    "Body",
+    "Hair",
+    "Hairs",
+    "Hair001",
+    "secondary",
 ]
 
 BONE_PAIRS = {
-    'Root': {'name': '全ての親', 'parent': None, 'tail': 'Center', 'display': None, 'flag': 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-             'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'Center': {'name': 'センター', 'parent': 'Root', 'tail': None, 'display': 'センター', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-               'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'Groove': {'name': 'グルーブ', 'parent': 'Center', 'tail': None, 'display': 'センター', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-               'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_C_Hips': {'name': '腰', 'parent': 'Groove', 'tail': None, 'display': '体幹', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_C_Spine': {'name': '下半身', 'parent': 'J_Bip_C_Hips', 'tail': None, 'display': '体幹', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                      'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_C_Spine2': {'name': '上半身', 'parent': 'J_Bip_C_Hips', 'tail': 'J_Bip_C_Chest', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                       'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_C_Chest': {'name': '上半身2', 'parent': 'J_Bip_C_Spine2', 'tail': 'J_Bip_C_UpperChest', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                      'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_C_UpperChest': {'name': '上半身3', 'parent': 'J_Bip_C_Chest', 'tail': 'J_Bip_C_Neck', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                           'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_C_Neck': {'name': '首', 'parent': 'J_Bip_C_UpperChest', 'tail': 'J_Bip_C_Head', 'display': '体幹', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 0, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2, 3]},
-    'J_Bip_C_Head': {'name': '頭', 'parent': 'J_Bip_C_Neck', 'tail': None, 'display': '体幹', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 3, 'rigidbodyShape': 0, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2, 3]},
-    'J_Adj_FaceEye': {'name': '両目', 'parent': 'J_Bip_C_Head', 'tail': None, 'display': '顔', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Adj_L_FaceEye': {'name': '左目', 'parent': 'J_Bip_C_Head', 'tail': None, 'display': '顔', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Adj_R_FaceEye': {'name': '右目', 'parent': 'J_Bip_C_Head', 'tail': None, 'display': '顔', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Sec_L_Bust1': {'name': '左胸', 'parent': 'J_Bip_C_UpperChest', 'tail': 'J_Sec_L_Bust2', 'display': '胸', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                      'rigidbodyGroup': 0, 'rigidbodyShape': 0, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Sec_L_Bust2': {'name': '左胸先', 'parent': 'J_Sec_L_Bust1', 'tail': None, 'display': None, 'flag': 0x0002, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Sec_R_Bust1': {'name': '右胸', 'parent': 'J_Bip_C_UpperChest', 'tail': 'J_Sec_R_Bust2', 'display': '胸', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                      'rigidbodyGroup': 0, 'rigidbodyShape': 0, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Sec_R_Bust2': {'name': '右胸先', 'parent': 'J_Sec_R_Bust1', 'tail': None, 'display': None, 'flag': 0x0002, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'shoulderP_L': {'name': '左肩P', 'parent': 'J_Bip_C_UpperChest', 'tail': None, 'display': '左手', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Shoulder': {'name': '左肩', 'parent': 'shoulderP_L', 'tail': 'J_Bip_L_UpperArm', 'display': '左手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'shoulderC_L': {'name': '左肩C', 'parent': 'J_Bip_L_Shoulder', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_UpperArm': {'name': '左腕', 'parent': 'shoulderC_L', 'tail': 'J_Bip_L_LowerArm', 'display': '左手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'arm_twist_L': {'name': '左腕捩', 'parent': 'J_Bip_L_UpperArm', 'tail': None, 'display': '左手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800 | 0x0800, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_1L': {'name': '左腕捩1', 'parent': 'J_Bip_L_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_2L': {'name': '左腕捩2', 'parent': 'J_Bip_L_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_3L': {'name': '左腕捩3', 'parent': 'J_Bip_L_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_LowerArm': {'name': '左ひじ', 'parent': 'arm_twist_L', 'tail': 'J_Bip_L_Hand', 'display': '左手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'wrist_twist_L': {'name': '左手捩', 'parent': 'J_Bip_L_LowerArm', 'tail': None, 'display': '左手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_1L': {'name': '左手捩1', 'parent': 'J_Bip_L_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_2L': {'name': '左手捩2', 'parent': 'J_Bip_L_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_3L': {'name': '左手捩3', 'parent': 'J_Bip_L_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Hand': {'name': '左手首', 'parent': 'wrist_twist_L', 'tail': None, 'display': '左手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                     'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_L_Thumb1': {'name': '左親指０', 'parent': 'J_Bip_L_Hand', 'tail': 'J_Bip_L_Thumb2', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Thumb2': {'name': '左親指１', 'parent': 'J_Bip_L_Thumb1', 'tail': 'J_Bip_L_Thumb3', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Thumb3': {'name': '左親指２', 'parent': 'J_Bip_L_Thumb2', 'tail': 'J_Bip_L_Thumb3_end', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Thumb3_end': {'name': '左親指先', 'parent': 'J_Bip_L_Thumb3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                           'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Index1': {'name': '左人指１', 'parent': 'J_Bip_L_Hand', 'tail': 'J_Bip_L_Index2', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Index2': {'name': '左人指２', 'parent': 'J_Bip_L_Index1', 'tail': 'J_Bip_L_Index3', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Index3': {'name': '左人指３', 'parent': 'J_Bip_L_Index2', 'tail': 'J_Bip_L_Index3_end', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Index3_end': {'name': '左人指先', 'parent': 'J_Bip_L_Index3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                           'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Middle1': {'name': '左中指１', 'parent': 'J_Bip_L_Hand', 'tail': 'J_Bip_L_Middle2', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Middle2': {'name': '左中指２', 'parent': 'J_Bip_L_Middle1', 'tail': 'J_Bip_L_Middle3', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Middle3': {'name': '左中指３', 'parent': 'J_Bip_L_Middle2', 'tail': 'J_Bip_L_Middle3_end', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Middle3_end': {'name': '左中指先', 'parent': 'J_Bip_L_Middle3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                            'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Ring1': {'name': '左薬指１', 'parent': 'J_Bip_L_Hand', 'tail': 'J_Bip_L_Ring2', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Ring2': {'name': '左薬指２', 'parent': 'J_Bip_L_Ring1', 'tail': 'J_Bip_L_Ring3', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Ring3': {'name': '左薬指３', 'parent': 'J_Bip_L_Ring2', 'tail': 'J_Bip_L_Ring3_end', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Ring3_end': {'name': '左薬指先', 'parent': 'J_Bip_L_Ring3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                          'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Little1': {'name': '左小指１', 'parent': 'J_Bip_L_Hand', 'tail': 'J_Bip_L_Little2', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Little2': {'name': '左小指２', 'parent': 'J_Bip_L_Little1', 'tail': 'J_Bip_L_Little3', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Little3': {'name': '左小指３', 'parent': 'J_Bip_L_Little2', 'tail': 'J_Bip_L_Little3_end', 'display': '左指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_Little3_end': {'name': '左小指先', 'parent': 'J_Bip_L_Little3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                            'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'shoulderP_R': {'name': '右肩P', 'parent': 'J_Bip_C_UpperChest', 'tail': None, 'display': '右手', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Shoulder': {'name': '右肩', 'parent': 'shoulderP_R', 'tail': 'J_Bip_R_UpperArm', 'display': '右手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'shoulderC_R': {'name': '右肩C', 'parent': 'J_Bip_R_Shoulder', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_UpperArm': {'name': '右腕', 'parent': 'shoulderC_R', 'tail': 'J_Bip_R_LowerArm', 'display': '右手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'arm_twist_R': {'name': '右腕捩', 'parent': 'J_Bip_R_UpperArm', 'tail': None, 'display': '右手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800, \
-                    'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_1R': {'name': '右腕捩1', 'parent': 'J_Bip_R_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_2R': {'name': '右腕捩2', 'parent': 'J_Bip_R_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'arm_twist_3R': {'name': '右腕捩3', 'parent': 'J_Bip_R_UpperArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                     'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_LowerArm': {'name': '右ひじ', 'parent': 'arm_twist_R', 'tail': 'J_Bip_R_Hand', 'display': '右手', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                         'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'wrist_twist_R': {'name': '右手捩', 'parent': 'J_Bip_R_LowerArm', 'tail': None, 'display': '右手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_1R': {'name': '右手捩1', 'parent': 'J_Bip_R_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_2R': {'name': '右手捩2', 'parent': 'J_Bip_R_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'wrist_twist_3R': {'name': '右手捩3', 'parent': 'J_Bip_R_LowerArm', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Hand': {'name': '右手首', 'parent': 'wrist_twist_R', 'tail': None, 'display': '右手', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                     'rigidbodyGroup': 2, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_R_Thumb1': {'name': '右親指０', 'parent': 'J_Bip_R_Hand', 'tail': 'J_Bip_R_Thumb2', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Thumb2': {'name': '右親指１', 'parent': 'J_Bip_R_Thumb1', 'tail': 'J_Bip_R_Thumb3', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Thumb3': {'name': '右親指２', 'parent': 'J_Bip_R_Thumb2', 'tail': 'J_Bip_R_Thumb3_end', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Thumb3_end': {'name': '右親指先', 'parent': 'J_Bip_R_Thumb3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                           'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Index1': {'name': '右人指１', 'parent': 'J_Bip_R_Hand', 'tail': 'J_Bip_R_Index2', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Index2': {'name': '右人指２', 'parent': 'J_Bip_R_Index1', 'tail': 'J_Bip_R_Index3', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Index3': {'name': '右人指３', 'parent': 'J_Bip_R_Index2', 'tail': 'J_Bip_R_Index3_end', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                       'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Index3_end': {'name': '右人指先', 'parent': 'J_Bip_R_Index3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                           'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Middle1': {'name': '右中指１', 'parent': 'J_Bip_R_Hand', 'tail': 'J_Bip_R_Middle2', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Middle2': {'name': '右中指２', 'parent': 'J_Bip_R_Middle1', 'tail': 'J_Bip_R_Middle3', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Middle3': {'name': '右中指３', 'parent': 'J_Bip_R_Middle2', 'tail': 'J_Bip_R_Middle3_end', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Middle3_end': {'name': '右中指先', 'parent': 'J_Bip_R_Middle3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                            'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Ring1': {'name': '右薬指１', 'parent': 'J_Bip_R_Hand', 'tail': 'J_Bip_R_Ring2', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Ring2': {'name': '右薬指２', 'parent': 'J_Bip_R_Ring1', 'tail': 'J_Bip_R_Ring3', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Ring3': {'name': '右薬指３', 'parent': 'J_Bip_R_Ring2', 'tail': 'J_Bip_R_Ring3_end', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Ring3_end': {'name': '右薬指先', 'parent': 'J_Bip_R_Ring3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                          'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Little1': {'name': '右小指１', 'parent': 'J_Bip_R_Hand', 'tail': 'J_Bip_R_Little2', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Little2': {'name': '右小指２', 'parent': 'J_Bip_R_Little1', 'tail': 'J_Bip_R_Little3', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Little3': {'name': '右小指３', 'parent': 'J_Bip_R_Little2', 'tail': 'J_Bip_R_Little3_end', 'display': '右指', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_Little3_end': {'name': '右小指先', 'parent': 'J_Bip_R_Little3', 'tail': None, 'display': None, 'flag': 0x0002, \
-                            'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'waistCancel_L': {'name': '腰キャンセル左', 'parent': 'J_Bip_C_Spine', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_L_UpperLeg': {'name': '左足', 'parent': 'waistCancel_L', 'tail': 'J_Bip_L_LowerLeg', 'display': '左足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                         'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_L_LowerLeg': {'name': '左ひざ', 'parent': 'J_Bip_L_UpperLeg', 'tail': 'J_Bip_L_Foot', 'display': '左足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                         'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_L_Foot': {'name': '左足首', 'parent': 'J_Bip_L_LowerLeg', 'tail': 'J_Bip_L_ToeBase', 'display': '左足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_L_ToeBase': {'name': '左つま先', 'parent': 'J_Bip_L_Foot', 'tail': None, 'display': '左足', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_IK_Parent_L': {'name': '左足IK親', 'parent': 'Root', 'tail': 'leg_IK_L', 'display': '左足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_IK_L': {'name': '左足ＩＫ', 'parent': 'leg_IK_Parent_L', 'tail': MVector3D(0, 0, 1), 'display': '左足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'toe_IK_L': {'name': '左つま先ＩＫ', 'parent': 'leg_IK_L', 'tail': MVector3D(0, -1, 0), 'display': '左足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'waistCancel_R': {'name': '腰キャンセル右', 'parent': 'J_Bip_C_Spine', 'tail': None, 'display': None, 'flag': 0x0002 | 0x0100, \
-                      'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'J_Bip_R_UpperLeg': {'name': '右足', 'parent': 'waistCancel_R', 'tail': 'J_Bip_R_LowerLeg', 'display': '右足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                         'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_R_LowerLeg': {'name': '右ひざ', 'parent': 'J_Bip_R_UpperLeg', 'tail': 'J_Bip_R_Foot', 'display': '右足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                         'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_R_Foot': {'name': '右足首', 'parent': 'J_Bip_R_LowerLeg', 'tail': 'J_Bip_R_ToeBase', 'display': '右足', 'flag': 0x0001 | 0x0002 | 0x0008 | 0x0010, \
-                     'rigidbodyGroup': 1, 'rigidbodyShape': 2, 'rigidbodyMode': 0, 'rigidbodyNoColl': [0, 1, 2]},
-    'J_Bip_R_ToeBase': {'name': '右つま先', 'parent': 'J_Bip_R_Foot', 'tail': None, 'display': '右足', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_IK_Parent_R': {'name': '右足IK親', 'parent': 'Root', 'tail': 'leg_IK_R', 'display': '右足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010, \
-                        'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_IK_R': {'name': '右足ＩＫ', 'parent': 'leg_IK_Parent_R', 'tail': MVector3D(0, 0, 1), 'display': '右足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'toe_IK_R': {'name': '右つま先ＩＫ', 'parent': 'leg_IK_R', 'tail': MVector3D(0, -1, 0), 'display': '右足', 'flag': 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_D_L': {'name': '左足D', 'parent': 'waistCancel_L', 'tail': None, 'display': '左足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'knee_D_L': {'name': '左ひざD', 'parent': 'leg_D_L', 'tail': None, 'display': '左足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'ankle_D_L': {'name': '左足首D', 'parent': 'knee_D_L', 'tail': None, 'display': '左足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                  'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'toe_EX_L': {'name': '左足先EX', 'parent': 'ankle_D_L', 'tail': MVector3D(0, 0, -1), 'display': '左足', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'leg_D_R': {'name': '右足D', 'parent': 'waistCancel_R', 'tail': None, 'display': '右足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'knee_D_R': {'name': '右ひざD', 'parent': 'leg_D_R', 'tail': None, 'display': '右足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'ankle_D_R': {'name': '右足首D', 'parent': 'knee_D_R', 'tail': None, 'display': '右足', 'flag': 0x0002 | 0x0008 | 0x0010 | 0x0100, \
-                  'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
-    'toe_EX_R': {'name': '右足先EX', 'parent': 'ankle_D_R', 'tail': MVector3D(0, 0, -1), 'display': '右足', 'flag': 0x0002 | 0x0008 | 0x0010, \
-                 'rigidbodyGroup': -1, 'rigidbodyShape': -1, 'rigidbodyMode': 0, 'rigidbodyNoColl': None},
+    "Root": {
+        "name": "全ての親",
+        "parent": None,
+        "tail": "Center",
+        "display": None,
+        "flag": 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "Center": {
+        "name": "センター",
+        "parent": "Root",
+        "tail": None,
+        "display": "センター",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "Groove": {
+        "name": "グルーブ",
+        "parent": "Center",
+        "tail": None,
+        "display": "センター",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_C_Hips": {
+        "name": "腰",
+        "parent": "Groove",
+        "tail": None,
+        "display": "体幹",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_C_Spine": {
+        "name": "下半身",
+        "parent": "J_Bip_C_Hips",
+        "tail": None,
+        "display": "体幹",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_C_Spine2": {
+        "name": "上半身",
+        "parent": "J_Bip_C_Hips",
+        "tail": "J_Bip_C_Chest",
+        "display": "体幹",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_C_Chest": {
+        "name": "上半身2",
+        "parent": "J_Bip_C_Spine2",
+        "tail": "J_Bip_C_UpperChest",
+        "display": "体幹",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_C_UpperChest": {
+        "name": "上半身3",
+        "parent": "J_Bip_C_Chest",
+        "tail": "J_Bip_C_Neck",
+        "display": "体幹",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_C_Neck": {
+        "name": "首",
+        "parent": "J_Bip_C_UpperChest",
+        "tail": "J_Bip_C_Head",
+        "display": "体幹",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2, 3],
+    },
+    "J_Bip_C_Head": {
+        "name": "頭",
+        "parent": "J_Bip_C_Neck",
+        "tail": None,
+        "display": "体幹",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 3,
+        "rigidbodyShape": 0,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2, 3],
+    },
+    "J_Adj_FaceEye": {
+        "name": "両目",
+        "parent": "J_Bip_C_Head",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_L_FaceEye": {
+        "name": "左目",
+        "parent": "J_Bip_C_Head",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_R_FaceEye": {
+        "name": "右目",
+        "parent": "J_Bip_C_Head",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Sec_L_Bust1": {
+        "name": "左胸",
+        "parent": "J_Bip_C_UpperChest",
+        "tail": "J_Sec_L_Bust2",
+        "display": "胸",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 0,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Sec_L_Bust2": {
+        "name": "左胸先",
+        "parent": "J_Sec_L_Bust1",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Sec_R_Bust1": {
+        "name": "右胸",
+        "parent": "J_Bip_C_UpperChest",
+        "tail": "J_Sec_R_Bust2",
+        "display": "胸",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 0,
+        "rigidbodyShape": 0,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Sec_R_Bust2": {
+        "name": "右胸先",
+        "parent": "J_Sec_R_Bust1",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "shoulderP_L": {
+        "name": "左肩P",
+        "parent": "J_Bip_C_UpperChest",
+        "tail": None,
+        "display": "左手",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Shoulder": {
+        "name": "左肩",
+        "parent": "shoulderP_L",
+        "tail": "J_Bip_L_UpperArm",
+        "display": "左手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "shoulderC_L": {
+        "name": "左肩C",
+        "parent": "J_Bip_L_Shoulder",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_UpperArm": {
+        "name": "左腕",
+        "parent": "shoulderC_L",
+        "tail": "J_Bip_L_LowerArm",
+        "display": "左手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "arm_twist_L": {
+        "name": "左腕捩",
+        "parent": "J_Bip_L_UpperArm",
+        "tail": None,
+        "display": "左手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_1L": {
+        "name": "左腕捩1",
+        "parent": "J_Bip_L_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_2L": {
+        "name": "左腕捩2",
+        "parent": "J_Bip_L_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_3L": {
+        "name": "左腕捩3",
+        "parent": "J_Bip_L_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_LowerArm": {
+        "name": "左ひじ",
+        "parent": "arm_twist_L",
+        "tail": "J_Bip_L_Hand",
+        "display": "左手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "wrist_twist_L": {
+        "name": "左手捩",
+        "parent": "J_Bip_L_LowerArm",
+        "tail": None,
+        "display": "左手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_1L": {
+        "name": "左手捩1",
+        "parent": "J_Bip_L_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_2L": {
+        "name": "左手捩2",
+        "parent": "J_Bip_L_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_3L": {
+        "name": "左手捩3",
+        "parent": "J_Bip_L_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Hand": {
+        "name": "左手首",
+        "parent": "wrist_twist_L",
+        "tail": None,
+        "display": "左手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_L_Thumb1": {
+        "name": "左親指０",
+        "parent": "J_Bip_L_Hand",
+        "tail": "J_Bip_L_Thumb2",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Thumb2": {
+        "name": "左親指１",
+        "parent": "J_Bip_L_Thumb1",
+        "tail": "J_Bip_L_Thumb3",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Thumb3": {
+        "name": "左親指２",
+        "parent": "J_Bip_L_Thumb2",
+        "tail": "J_Bip_L_Thumb3_end",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Thumb3_end": {
+        "name": "左親指先",
+        "parent": "J_Bip_L_Thumb3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Index1": {
+        "name": "左人指１",
+        "parent": "J_Bip_L_Hand",
+        "tail": "J_Bip_L_Index2",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Index2": {
+        "name": "左人指２",
+        "parent": "J_Bip_L_Index1",
+        "tail": "J_Bip_L_Index3",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Index3": {
+        "name": "左人指３",
+        "parent": "J_Bip_L_Index2",
+        "tail": "J_Bip_L_Index3_end",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Index3_end": {
+        "name": "左人指先",
+        "parent": "J_Bip_L_Index3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Middle1": {
+        "name": "左中指１",
+        "parent": "J_Bip_L_Hand",
+        "tail": "J_Bip_L_Middle2",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Middle2": {
+        "name": "左中指２",
+        "parent": "J_Bip_L_Middle1",
+        "tail": "J_Bip_L_Middle3",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Middle3": {
+        "name": "左中指３",
+        "parent": "J_Bip_L_Middle2",
+        "tail": "J_Bip_L_Middle3_end",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Middle3_end": {
+        "name": "左中指先",
+        "parent": "J_Bip_L_Middle3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Ring1": {
+        "name": "左薬指１",
+        "parent": "J_Bip_L_Hand",
+        "tail": "J_Bip_L_Ring2",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Ring2": {
+        "name": "左薬指２",
+        "parent": "J_Bip_L_Ring1",
+        "tail": "J_Bip_L_Ring3",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Ring3": {
+        "name": "左薬指３",
+        "parent": "J_Bip_L_Ring2",
+        "tail": "J_Bip_L_Ring3_end",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Ring3_end": {
+        "name": "左薬指先",
+        "parent": "J_Bip_L_Ring3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Little1": {
+        "name": "左小指１",
+        "parent": "J_Bip_L_Hand",
+        "tail": "J_Bip_L_Little2",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Little2": {
+        "name": "左小指２",
+        "parent": "J_Bip_L_Little1",
+        "tail": "J_Bip_L_Little3",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Little3": {
+        "name": "左小指３",
+        "parent": "J_Bip_L_Little2",
+        "tail": "J_Bip_L_Little3_end",
+        "display": "左指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_Little3_end": {
+        "name": "左小指先",
+        "parent": "J_Bip_L_Little3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "shoulderP_R": {
+        "name": "右肩P",
+        "parent": "J_Bip_C_UpperChest",
+        "tail": None,
+        "display": "右手",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Shoulder": {
+        "name": "右肩",
+        "parent": "shoulderP_R",
+        "tail": "J_Bip_R_UpperArm",
+        "display": "右手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "shoulderC_R": {
+        "name": "右肩C",
+        "parent": "J_Bip_R_Shoulder",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_UpperArm": {
+        "name": "右腕",
+        "parent": "shoulderC_R",
+        "tail": "J_Bip_R_LowerArm",
+        "display": "右手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "arm_twist_R": {
+        "name": "右腕捩",
+        "parent": "J_Bip_R_UpperArm",
+        "tail": None,
+        "display": "右手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_1R": {
+        "name": "右腕捩1",
+        "parent": "J_Bip_R_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_2R": {
+        "name": "右腕捩2",
+        "parent": "J_Bip_R_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "arm_twist_3R": {
+        "name": "右腕捩3",
+        "parent": "J_Bip_R_UpperArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_LowerArm": {
+        "name": "右ひじ",
+        "parent": "arm_twist_R",
+        "tail": "J_Bip_R_Hand",
+        "display": "右手",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "wrist_twist_R": {
+        "name": "右手捩",
+        "parent": "J_Bip_R_LowerArm",
+        "tail": None,
+        "display": "右手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0400 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_1R": {
+        "name": "右手捩1",
+        "parent": "J_Bip_R_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_2R": {
+        "name": "右手捩2",
+        "parent": "J_Bip_R_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "wrist_twist_3R": {
+        "name": "右手捩3",
+        "parent": "J_Bip_R_LowerArm",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Hand": {
+        "name": "右手首",
+        "parent": "wrist_twist_R",
+        "tail": None,
+        "display": "右手",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": 2,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_R_Thumb1": {
+        "name": "右親指０",
+        "parent": "J_Bip_R_Hand",
+        "tail": "J_Bip_R_Thumb2",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Thumb2": {
+        "name": "右親指１",
+        "parent": "J_Bip_R_Thumb1",
+        "tail": "J_Bip_R_Thumb3",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Thumb3": {
+        "name": "右親指２",
+        "parent": "J_Bip_R_Thumb2",
+        "tail": "J_Bip_R_Thumb3_end",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Thumb3_end": {
+        "name": "右親指先",
+        "parent": "J_Bip_R_Thumb3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Index1": {
+        "name": "右人指１",
+        "parent": "J_Bip_R_Hand",
+        "tail": "J_Bip_R_Index2",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Index2": {
+        "name": "右人指２",
+        "parent": "J_Bip_R_Index1",
+        "tail": "J_Bip_R_Index3",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Index3": {
+        "name": "右人指３",
+        "parent": "J_Bip_R_Index2",
+        "tail": "J_Bip_R_Index3_end",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Index3_end": {
+        "name": "右人指先",
+        "parent": "J_Bip_R_Index3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Middle1": {
+        "name": "右中指１",
+        "parent": "J_Bip_R_Hand",
+        "tail": "J_Bip_R_Middle2",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Middle2": {
+        "name": "右中指２",
+        "parent": "J_Bip_R_Middle1",
+        "tail": "J_Bip_R_Middle3",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Middle3": {
+        "name": "右中指３",
+        "parent": "J_Bip_R_Middle2",
+        "tail": "J_Bip_R_Middle3_end",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Middle3_end": {
+        "name": "右中指先",
+        "parent": "J_Bip_R_Middle3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Ring1": {
+        "name": "右薬指１",
+        "parent": "J_Bip_R_Hand",
+        "tail": "J_Bip_R_Ring2",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Ring2": {
+        "name": "右薬指２",
+        "parent": "J_Bip_R_Ring1",
+        "tail": "J_Bip_R_Ring3",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Ring3": {
+        "name": "右薬指３",
+        "parent": "J_Bip_R_Ring2",
+        "tail": "J_Bip_R_Ring3_end",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Ring3_end": {
+        "name": "右薬指先",
+        "parent": "J_Bip_R_Ring3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Little1": {
+        "name": "右小指１",
+        "parent": "J_Bip_R_Hand",
+        "tail": "J_Bip_R_Little2",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Little2": {
+        "name": "右小指２",
+        "parent": "J_Bip_R_Little1",
+        "tail": "J_Bip_R_Little3",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Little3": {
+        "name": "右小指３",
+        "parent": "J_Bip_R_Little2",
+        "tail": "J_Bip_R_Little3_end",
+        "display": "右指",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_Little3_end": {
+        "name": "右小指先",
+        "parent": "J_Bip_R_Little3",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "waistCancel_L": {
+        "name": "腰キャンセル左",
+        "parent": "J_Bip_C_Spine",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_L_UpperLeg": {
+        "name": "左足",
+        "parent": "waistCancel_L",
+        "tail": "J_Bip_L_LowerLeg",
+        "display": "左足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_L_LowerLeg": {
+        "name": "左ひざ",
+        "parent": "J_Bip_L_UpperLeg",
+        "tail": "J_Bip_L_Foot",
+        "display": "左足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_L_Foot": {
+        "name": "左足首",
+        "parent": "J_Bip_L_LowerLeg",
+        "tail": "J_Bip_L_ToeBase",
+        "display": "左足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_L_ToeBase": {
+        "name": "左つま先",
+        "parent": "J_Bip_L_Foot",
+        "tail": None,
+        "display": "左足",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_IK_Parent_L": {
+        "name": "左足IK親",
+        "parent": "Root",
+        "tail": "leg_IK_L",
+        "display": "左足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_IK_L": {
+        "name": "左足ＩＫ",
+        "parent": "leg_IK_Parent_L",
+        "tail": MVector3D(0, 0, 1),
+        "display": "左足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "toe_IK_L": {
+        "name": "左つま先ＩＫ",
+        "parent": "leg_IK_L",
+        "tail": MVector3D(0, -1, 0),
+        "display": "左足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "waistCancel_R": {
+        "name": "腰キャンセル右",
+        "parent": "J_Bip_C_Spine",
+        "tail": None,
+        "display": None,
+        "flag": 0x0002 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Bip_R_UpperLeg": {
+        "name": "右足",
+        "parent": "waistCancel_R",
+        "tail": "J_Bip_R_LowerLeg",
+        "display": "右足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_R_LowerLeg": {
+        "name": "右ひざ",
+        "parent": "J_Bip_R_UpperLeg",
+        "tail": "J_Bip_R_Foot",
+        "display": "右足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_R_Foot": {
+        "name": "右足首",
+        "parent": "J_Bip_R_LowerLeg",
+        "tail": "J_Bip_R_ToeBase",
+        "display": "右足",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": 1,
+        "rigidbodyShape": 2,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": [0, 1, 2],
+    },
+    "J_Bip_R_ToeBase": {
+        "name": "右つま先",
+        "parent": "J_Bip_R_Foot",
+        "tail": None,
+        "display": "右足",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_IK_Parent_R": {
+        "name": "右足IK親",
+        "parent": "Root",
+        "tail": "leg_IK_R",
+        "display": "右足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_IK_R": {
+        "name": "右足ＩＫ",
+        "parent": "leg_IK_Parent_R",
+        "tail": MVector3D(0, 0, 1),
+        "display": "右足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "toe_IK_R": {
+        "name": "右つま先ＩＫ",
+        "parent": "leg_IK_R",
+        "tail": MVector3D(0, -1, 0),
+        "display": "右足",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0020,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_D_L": {
+        "name": "左足D",
+        "parent": "waistCancel_L",
+        "tail": None,
+        "display": "左足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "knee_D_L": {
+        "name": "左ひざD",
+        "parent": "leg_D_L",
+        "tail": None,
+        "display": "左足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "ankle_D_L": {
+        "name": "左足首D",
+        "parent": "knee_D_L",
+        "tail": None,
+        "display": "左足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "toe_EX_L": {
+        "name": "左足先EX",
+        "parent": "ankle_D_L",
+        "tail": MVector3D(0, 0, -1),
+        "display": "左足",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "leg_D_R": {
+        "name": "右足D",
+        "parent": "waistCancel_R",
+        "tail": None,
+        "display": "右足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "knee_D_R": {
+        "name": "右ひざD",
+        "parent": "leg_D_R",
+        "tail": None,
+        "display": "右足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "ankle_D_R": {
+        "name": "右足首D",
+        "parent": "knee_D_R",
+        "tail": None,
+        "display": "右足",
+        "flag": 0x0002 | 0x0008 | 0x0010 | 0x0100,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "toe_EX_R": {
+        "name": "右足先EX",
+        "parent": "ankle_D_R",
+        "tail": MVector3D(0, 0, -1),
+        "display": "右足",
+        "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
 }
 
 MORPH_EYEBROW = 1
@@ -2173,13 +3631,49 @@ MORPH_PAIRS = {
     "brow_Front_R": {"name": "右眉手前", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
     "brow_Front_L": {"name": "左眉手前", "panel": MORPH_EYEBROW, "creates": ["FaceBrow"]},
     "brow_Front": {"name": "眉手前", "panel": MORPH_EYEBROW, "binds": ["brow_Front_R", "brow_Front_L"]},
-    "brow_Serious_R": {"name": "真面目右", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_R", "brow_Below_R"], "ratios": [0.25, 0.7]},
-    "brow_Serious_L": {"name": "真面目左", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_L", "brow_Below_L"], "ratios": [0.25, 0.7]},
-    "brow_Serious": {"name": "真面目", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_R", "brow_Below_R", "Fcl_BRW_Angry_L", "brow_Below_L"], "ratios": [0.25, 0.7, 0.25, 0.7]},
-    "brow_Frown_R": {"name": "ひそめ右", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_R", "Fcl_BRW_Sorrow_R", "brow_Right_R"], "ratios": [0.5, 0.5, 0.3]},
-    "brow_Frown_L": {"name": "ひそめ左", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_L", "Fcl_BRW_Sorrow_L", "brow_Left_L"], "ratios": [0.5, 0.5, 0.3]},
-    "brow_Frown": {"name": "ひそめ", "panel": MORPH_EYEBROW, "binds": ["Fcl_BRW_Angry_R", "Fcl_BRW_Sorrow_R", "brow_Right_R", "Fcl_BRW_Angry_L", "Fcl_BRW_Sorrow_L", "brow_Left_L"], \
-                   "ratios": [0.5, 0.5, 0.3, 0.5, 0.5, 0.3]},
+    "brow_Serious_R": {
+        "name": "真面目右",
+        "panel": MORPH_EYEBROW,
+        "binds": ["Fcl_BRW_Angry_R", "brow_Below_R"],
+        "ratios": [0.25, 0.7],
+    },
+    "brow_Serious_L": {
+        "name": "真面目左",
+        "panel": MORPH_EYEBROW,
+        "binds": ["Fcl_BRW_Angry_L", "brow_Below_L"],
+        "ratios": [0.25, 0.7],
+    },
+    "brow_Serious": {
+        "name": "真面目",
+        "panel": MORPH_EYEBROW,
+        "binds": ["Fcl_BRW_Angry_R", "brow_Below_R", "Fcl_BRW_Angry_L", "brow_Below_L"],
+        "ratios": [0.25, 0.7, 0.25, 0.7],
+    },
+    "brow_Frown_R": {
+        "name": "ひそめ右",
+        "panel": MORPH_EYEBROW,
+        "binds": ["Fcl_BRW_Angry_R", "Fcl_BRW_Sorrow_R", "brow_Right_R"],
+        "ratios": [0.5, 0.5, 0.3],
+    },
+    "brow_Frown_L": {
+        "name": "ひそめ左",
+        "panel": MORPH_EYEBROW,
+        "binds": ["Fcl_BRW_Angry_L", "Fcl_BRW_Sorrow_L", "brow_Left_L"],
+        "ratios": [0.5, 0.5, 0.3],
+    },
+    "brow_Frown": {
+        "name": "ひそめ",
+        "panel": MORPH_EYEBROW,
+        "binds": [
+            "Fcl_BRW_Angry_R",
+            "Fcl_BRW_Sorrow_R",
+            "brow_Right_R",
+            "Fcl_BRW_Angry_L",
+            "Fcl_BRW_Sorrow_L",
+            "brow_Left_L",
+        ],
+        "ratios": [0.5, 0.5, 0.3, 0.5, 0.5, 0.3],
+    },
     "browInnerUp_R": {"name": "ひそめる2右", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
     "browInnerUp_L": {"name": "ひそめる2左", "panel": MORPH_EYEBROW, "split": "browInnerUp"},
     "browInnerUp": {"name": "ひそめる2", "panel": MORPH_EYEBROW},
@@ -2189,7 +3683,6 @@ MORPH_PAIRS = {
     "browOuterUpRight": {"name": "はんっ右", "panel": MORPH_EYEBROW},
     "browOuterUpLeft": {"name": "はんっ左", "panel": MORPH_EYEBROW},
     "browOuter": {"name": "はんっ", "panel": MORPH_EYEBROW, "binds": ["browOuterUpRight", "browOuterUpLeft"]},
-
     "Fcl_EYE_Close": {"name": "まばたき", "panel": MORPH_EYE},
     "Fcl_EYE_Joy": {"name": "笑い", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
@@ -2226,15 +3719,29 @@ MORPH_PAIRS = {
     "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["eye_Big_R", "eye_Big_L"]},
-    "eye_Nanu_R": {"name": "なぬ！右", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R"], "ratios": [1, 1]},
-    "eye_Nanu_L": {"name": "なぬ！左", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"], "ratios": [1, 1]},
-    "eye_Nanu": {"name": "なぬ！", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"], "ratios": [1, 1, 1, 1]},
+    "eye_Nanu_R": {
+        "name": "なぬ！右",
+        "panel": MORPH_EYE,
+        "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R"],
+        "ratios": [1, 1],
+    },
+    "eye_Nanu_L": {
+        "name": "なぬ！左",
+        "panel": MORPH_EYE,
+        "binds": ["Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"],
+        "ratios": [1, 1],
+    },
+    "eye_Nanu": {
+        "name": "なぬ！",
+        "panel": MORPH_EYE,
+        "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"],
+        "ratios": [1, 1, 1, 1],
+    },
     "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
     "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},
     "eye_Star": {"name": "星目", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Star_Material"]},
     "eye_Heart": {"name": "はぁと", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Heart_Material"]},
     "Fcl_EYE_Natural": {"name": "ナチュラル", "panel": MORPH_EYE},
-
     "eyeWideRight": {"name": "びっくり2右", "panel": MORPH_EYE},
     "eyeWideLeft": {"name": "びっくり2左", "panel": MORPH_EYE},
     "eyeWide": {"name": "びっくり2", "panel": MORPH_EYE, "binds": ["eyeSquintRight", "eyeSquintLeft"]},
@@ -2257,15 +3764,17 @@ MORPH_PAIRS = {
     "_eyeIrisMoveBack": {"name": "瞳小2", "panel": MORPH_EYE, "binds": ["_eyeIrisMoveBack_R", "_eyeIrisMoveBack_L"]},
     "_eyeSquint+LowerUp_R": {"name": "下瞼上げ2右", "panel": MORPH_EYE},
     "_eyeSquint+LowerUp_L": {"name": "下瞼上げ2左", "panel": MORPH_EYE},
-    "_eyeSquint+LowerUp": {"name": "下瞼上げ2", "panel": MORPH_EYE, "binds": ["_eyeSquint+LowerUp_R", "_eyeSquint+LowerUp_L"]},
-
+    "_eyeSquint+LowerUp": {
+        "name": "下瞼上げ2",
+        "panel": MORPH_EYE,
+        "binds": ["_eyeSquint+LowerUp_R", "_eyeSquint+LowerUp_L"],
+    },
     "Fcl_EYE_Iris_Hide": {"name": "白目", "panel": MORPH_EYE},
     "Fcl_EYE_Iris_Hide_R": {"name": "白目右", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
     "Fcl_EYE_Iris_Hide_L": {"name": "白目左", "panel": MORPH_EYE, "split": "Fcl_EYE_Iris_Hide"},
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
     "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
-
     "Fcl_MTH_A": {"name": "あ", "panel": MORPH_LIP},
     "Fcl_MTH_I": {"name": "い", "panel": MORPH_LIP},
     "Fcl_MTH_U": {"name": "う", "panel": MORPH_LIP},
@@ -2285,7 +3794,6 @@ MORPH_PAIRS = {
     "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
     "Fcl_MTH_Sorrow": {"name": "▲", "panel": MORPH_LIP},
     "Fcl_MTH_Surprised": {"name": "あ２", "panel": MORPH_LIP},
-    
     "jawOpen": {"name": "あああ", "panel": MORPH_LIP},
     "jawForward": {"name": "顎前", "panel": MORPH_LIP},
     "jawLeft": {"name": "顎左", "panel": MORPH_LIP},
@@ -2333,7 +3841,6 @@ MORPH_PAIRS = {
     "cheekPuff_R": {"name": "ぷくー右", "panel": MORPH_LIP, "split": "cheekPuff"},
     "cheekPuff_L": {"name": "ぷくー左", "panel": MORPH_LIP, "split": "cheekPuff"},
     "cheekPuff": {"name": "ぷくー", "panel": MORPH_LIP},
-
     "Fcl_MTH_SkinFung_L": {"name": "肌牙左", "panel": MORPH_LIP},
     "Fcl_MTH_SkinFung_R": {"name": "肌牙右", "panel": MORPH_LIP},
     "Fcl_MTH_SkinFung": {"name": "肌牙", "panel": MORPH_LIP},
@@ -2354,7 +3861,6 @@ MORPH_PAIRS = {
     "Fcl_HA_Short_Up": {"name": "歯短上", "panel": MORPH_LIP},
     "Fcl_HA_Short_Low": {"name": "歯短下", "panel": MORPH_LIP},
     "Fcl_HA_Short": {"name": "歯短", "panel": MORPH_LIP},
-
     "Cheek_Dye": {"name": "照れ", "panel": MORPH_OTHER, "material": "cheek_dye"},
     "Fcl_ALL_Neutral": {"name": "ニュートラル", "panel": MORPH_OTHER},
     "Fcl_ALL_Angry": {"name": "怒", "panel": MORPH_OTHER},

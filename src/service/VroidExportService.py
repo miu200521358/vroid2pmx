@@ -502,13 +502,18 @@ class VroidExportService:
                 # 球体
                 if "頭" == bone.name:
                     # 頭はエルフ耳がある場合があるので、両目の間隔を使う
-                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3.5
+                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3
                     center_vertex[0] = bone.position.x()
                     center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2
                     center_vertex[2] = bone.position.z()
                     shape_size = MVector3D(eye_length, eye_length, eye_length)
+                elif "胸" in bone.name:
+                    # 胸は奥行き
+                    max_size = diff_size[2] * 0.9
+                    shape_size = MVector3D(max_size, max_size, max_size)
+                    center_vertex = bone.position
                 else:
-                    # それ以外（胸とか）はそのまま
+                    # それ以外はそのまま（入らないはず）
                     max_size = np.max(diff_size * 0.9)
                     shape_size = MVector3D(max_size, max_size, max_size)
                     center_vertex = bone.position

@@ -138,9 +138,7 @@ class VroidExportService:
             if not model:
                 return False
 
-            bone_vertices = self.create_bone_vertices(model)
-
-            model = self.create_body_physics(model, bone_vertices)
+            model = self.create_body_rigidbody(model)
             if not model:
                 return False
 
@@ -207,15 +205,19 @@ class VroidExportService:
 
                         if "胸" in bone.name:
                             target_names = ["CLOTH", "SKIN"]
-                            parent_bone_name = "上半身3"
-                            abb_names[logger.transtext("胸(小)")] = "胸"
+                            parent_bone_name = bone.name
+                            target_primitive_name = (
+                                logger.transtext("胸(小)")
+                                if bone.position.distanceToPoint(
+                                    model.bones[model.bone_indexes[bone.tail_index]].position
+                                )
+                                < 0.7
+                                else logger.transtext("胸(大)")
+                            )
+                            abb_names[target_primitive_name] = bone.name
                             rigidbody_group = "1"
-                            target_bones[logger.transtext("胸(小)")] = []
-                            target_bones[logger.transtext("胸(小)")].append([bone.name, f"{bone.name}先"])
-                            if "左" in bone.name:
-                                target_bones[logger.transtext("胸(小)")].append(["右胸", "右胸先"])
-                            else:
-                                target_bones[logger.transtext("胸(小)")].append(["左胸", "左胸先"])
+                            target_bones[target_primitive_name] = []
+                            target_bones[target_primitive_name].append([bone.name, f"{bone.name}先"])
                         elif "髪" in bone.name:
                             target_names = ["HAIR"]
                             parent_bone_name = "頭"
@@ -228,7 +230,14 @@ class VroidExportService:
                                     hair_bones[bname[:4]].append(bname)
 
                             for hbones in hair_bones.values():
-                                if len(hbones) < 4:
+                                if (
+                                    len(hbones) > 1
+                                    and (model.bones[hbones[0]].position - model.bones[hbones[1]].position).y() < 0
+                                ):
+                                    if logger.transtext("髪(アホ毛)") not in target_bones:
+                                        target_bones[logger.transtext("髪(アホ毛)")] = []
+                                    target_bones[logger.transtext("髪(アホ毛)")].append(hbones)
+                                elif len(hbones) < 4:
                                     if logger.transtext("髪(ショート)") not in target_bones:
                                         target_bones[logger.transtext("髪(ショート)")] = []
                                     target_bones[logger.transtext("髪(ショート)")].append(hbones)
@@ -237,6 +246,8 @@ class VroidExportService:
                                         target_bones[logger.transtext("髪(ロング)")] = []
                                     target_bones[logger.transtext("髪(ロング)")].append(hbones)
 
+                            if logger.transtext("髪(アホ毛)") in target_bones:
+                                abb_names[logger.transtext("髪(アホ毛)")] = "髪H"
                             if logger.transtext("髪(ショート)") in target_bones:
                                 abb_names[logger.transtext("髪(ショート)")] = "髪S"
                             if logger.transtext("髪(ロング)") in target_bones:
@@ -320,7 +331,8 @@ class VroidExportService:
                                 if nidx > 0 and len(target_bones[logger.transtext("布(コットン)")][-1]) > 0:
                                     target_bones[logger.transtext("布(コットン)")].append([])
                                 for bname in model.bones.keys():
-                                    if vertical_name in bname:
+                                    if vertical_name in bname and "0" not in bname[bname.find(vertical_name) :]:
+                                        # スカートの0番目はウェイトを持ってないのでスルー
                                         target_bones[logger.transtext("布(コットン)")][-1].append(bname)
                         elif "Coat" in bone.name:
                             target_names = ["CLOTH"]
@@ -376,20 +388,65 @@ class VroidExportService:
                                         )
 
                             break
-                if not re.search(r"HoodString|Sleeve", bone_bname):
+
+                logger.info("-- -- PmxTailor用設定ファイル出力 (%s)", bone.name)
+
+                if not re.search(r"HoodString|Sleeve|Bust", bone_bname):
                     # 袖・フードの紐は別々に設定が必要なのでbreakしない
                     break
 
         logger.info("-- PmxTailor用設定ファイル出力終了")
 
-    def create_body_physics(self, model: PmxModel, bone_vertices: dict):
-        for bone_name, bone in model.bones.items():
-            if (
-                bone.index not in bone_vertices
-                or bone.english_name not in BONE_PAIRS
-                or (bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]["rigidbodyGroup"] < 0)
+    def create_body_rigidbody(self, model: PmxModel):
+        skin_vertices = []
+        all_vertices = []
+        for material_name, v_index_list in model.material_vertices.items():
+            # 肌材質頂点のみを対象とする
+            if "SKIN" in model.materials[material_name].english_name:
+                skin_vertices.extend(v_index_list)
+            all_vertices.extend(v_index_list)
+
+        out_skin_bone_vertices = {}
+        skin_bone_vertices = {}
+        for vertex in model.vertex_dict.values():
+            # 基本は肌材質頂点のみを対象とする
+            target_vertices = skin_bone_vertices
+            if vertex.index not in skin_vertices and not [
+                bone_index
+                for bone_index in vertex.deform.get_idx_list()
+                if "ひじ" in model.bone_indexes[bone_index] or "手首" in model.bone_indexes[bone_index]
+            ]:
+                # 肌頂点がない場合、肌以外の頂点を対象とする
+                target_vertices = out_skin_bone_vertices
+
+            for bone_idx in vertex.deform.get_idx_list(0.2):
+                if bone_idx not in target_vertices:
+                    target_vertices[bone_idx] = []
+                bone = model.bones[model.bone_indexes[bone_idx]]
+                target_vertices[bone_idx].append(vertex)
+
+                if "捩" in bone.name:
+                    # 捩りは親に入れる
+                    if bone.parent_index not in target_vertices:
+                        target_vertices[bone.parent_index] = []
+                    target_vertices[bone.parent_index].append(vertex)
+                elif "指" in bone.name:
+                    # 指は手首に入れる
+                    wrist_bone_index = model.bones[f"{bone.name[0]}手首"].index
+                    if wrist_bone_index not in target_vertices:
+                        target_vertices[wrist_bone_index] = []
+                    target_vertices[wrist_bone_index].append(vertex)
+                elif bone.getExternalRotationFlag():
+                    # 回転付与の場合、付与親に入れる
+                    if bone.effect_index not in target_vertices:
+                        target_vertices[bone.effect_index] = []
+                    target_vertices[bone.effect_index].append(vertex)
+
+        for bone in model.bones.values():
+            if bone.english_name not in BONE_PAIRS or (
+                bone.english_name in BONE_PAIRS and BONE_PAIRS[bone.english_name]["rigidbodyGroup"] < 0
             ):
-                # ボーンに紐付く頂点がないか、人体ボーンで対象外の場合、スルー
+                # 人体ボーンでないか、人体ボーンで対象外の場合、スルー
                 continue
 
             rigidbody_shape = BONE_PAIRS[bone.english_name]["rigidbodyShape"]
@@ -402,10 +459,17 @@ class VroidExportService:
                 if nc not in no_collision_group_list:
                     no_collision_group |= 1 << nc
 
+            # 肌のみであるか
+            skin_offset = 0.05 if len(skin_bone_vertices.get(bone.index, [])) > 8 else 0
+
             # 剛体生成対象の場合のみ作成
             vertex_list = []
             normal_list = []
-            for vertex in bone_vertices[bone.index]:
+            for vertex in (
+                skin_bone_vertices[bone.index]
+                if len(skin_bone_vertices.get(bone.index, [])) > 8
+                else skin_bone_vertices.get(bone.index, []) + out_skin_bone_vertices.get(bone.index, [])
+            ):
                 vertex_list.append(vertex.position.data().tolist())
                 normal_list.append(vertex.normal.data().tolist())
             vertex_ary = np.array(vertex_list)
@@ -420,11 +484,15 @@ class VroidExportService:
 
             # ボーンの向き先に沿う
             tail_bone = None
-            if bone.tail_index > 0:
-                tail_bone = [b for b in model.bones.values() if bone.tail_index == b.index][0]
-                tail_position = tail_bone.position
+            if "手首" in bone.name:
+                # 手首は中指3を方向とする
+                tail_position = model.bones[f"{bone.name[0]}中指先"].position
             else:
-                tail_position = bone.tail_position + bone.position
+                if bone.tail_index > 0:
+                    tail_bone = [b for b in model.bones.values() if bone.tail_index == b.index][0]
+                    tail_position = tail_bone.position
+                else:
+                    tail_position = bone.tail_position + bone.position
 
             # サイズ
             diff_size = np.abs(max_vertex - min_vertex)
@@ -434,14 +502,14 @@ class VroidExportService:
                 # 球体
                 if "頭" == bone.name:
                     # 頭はエルフ耳がある場合があるので、両目の間隔を使う
-                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 2.5
+                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3.5
                     center_vertex[0] = bone.position.x()
                     center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2
                     center_vertex[2] = bone.position.z()
                     shape_size = MVector3D(eye_length, eye_length, eye_length)
                 else:
                     # それ以外（胸とか）はそのまま
-                    max_size = np.max(diff_size / 2)
+                    max_size = np.max(diff_size * 0.9)
                     shape_size = MVector3D(max_size, max_size, max_size)
                     center_vertex = bone.position
             else:
@@ -481,22 +549,47 @@ class VroidExportService:
                         center_vertex = bone.position + (tail_position - bone.position) / 2
                 else:
                     # カプセル
-                    if ("左" in bone.name or "右" in bone.name) and (
-                        "腕" in bone.name or "ひじ" in bone.name or "手首" in bone.name
-                    ):
+                    if "肩" in bone.name or "腕" in bone.name or "ひじ" in bone.name:
                         # 腕の場合 / 半径：Y, 高さ：X
-                        shape_size = MVector3D(diff_size[1] * 0.26, abs(axis_vec.x() * 1), diff_size[2])
-                    elif "上" in bone.name or "下" in bone.name:
+                        shape_size = MVector3D(diff_size[1] * (0.2 + skin_offset), abs(axis_vec.x() * 1), diff_size[2])
+                    elif "手首" in bone.name:
+                        # 腕の場合 / 半径：Y, 高さ：X
+                        shape_size = MVector3D(
+                            diff_size[1] * (0.2 + skin_offset), abs(axis_vec.x() * 0.7), diff_size[2]
+                        )
+                    elif "半身" in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.35, abs(axis_vec.y() * 0.5), diff_size[2])
+                        shape_size = MVector3D(
+                            diff_size[0] * (0.25 + skin_offset), abs(axis_vec.y() * 0.5), diff_size[2]
+                        )
                     elif "首" == bone.name:
                         # 首の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.2, abs(axis_vec.y() * 0.8), diff_size[2])
+                        shape_size = MVector3D(
+                            diff_size[0] * (0.15 + skin_offset), abs(axis_vec.y() * 0.8), diff_size[2]
+                        )
+                    elif "ひざ" in bone.name:
+                        # ひざの場合 / 半径：X, 高さ：Y
+                        shape_size = MVector3D(diff_size[0] * (0.6 + skin_offset), abs(axis_vec.y() * 1), diff_size[2])
+                    elif "足首" in bone.name:
+                        # 足首の場合 / 半径：X, 高さ：Y
+                        shape_size = MVector3D(diff_size[0] * (0.8 + skin_offset), abs(axis_vec.y() * 1), diff_size[2])
                     else:
                         # 足の場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * 0.45, abs(axis_vec.y() * 1), diff_size[2])
+                        shape_size = MVector3D(
+                            diff_size[0] * (0.5 + skin_offset), abs(axis_vec.y() * 0.8), diff_size[2]
+                        )
 
+                    # 剛体の位置は基本的にはボーンの間
                     center_vertex = bone.position + (tail_position - bone.position) / 2
+
+                    if "ひざ" in bone.name:
+                        # ひざはふくらはぎがあるので、ちょっと後ろにずらす
+                        center_vertex.setZ(center_vertex.z() + diff_size[2] * 0.15)
+
+                    if "足首" in bone.name:
+                        # 足首は少し下にずらす
+                        center_vertex.setY(center_vertex.y() - (diff_size[1] * 0.15))
+                        center_vertex.setZ(center_vertex.z() + diff_size[2] * 0.15)
 
             logger.debug(
                 "bone: %s, min: %s, max: %s, center: %s, size: %s",
@@ -526,31 +619,39 @@ class VroidExportService:
             rigidbody.index = len(model.rigidbodies)
             model.rigidbodies[rigidbody.name] = rigidbody
 
+            if "足" == bone.name[-1]:
+                # 足ボーンの場合、尻剛体も追加する
+                max_size = diff_size[2] * 0.52
+                shape_size = MVector3D(max_size, max_size, max_size)
+                center_vertex = MVector3D(
+                    np.average([model.bones["下半身"].position.x(), bone.position.x()], weights=[0.4, 0.6]),
+                    np.average([model.bones["下半身"].position.y(), bone.position.y()], weights=[0.1, 0.9]),
+                    np.mean(vertex_ary[:, 2]),
+                )
+
+                rigidbody = RigidBody(
+                    f"{bone.name[0]}尻",
+                    f"{bone.english_name}_Hip",
+                    bone.index,
+                    collision_group,
+                    no_collision_group,
+                    0,
+                    shape_size,
+                    center_vertex,
+                    MVector3D(),
+                    1,
+                    0.5,
+                    0.5,
+                    0,
+                    0,
+                    rigidbody_mode,
+                )
+                rigidbody.index = len(model.rigidbodies)
+                model.rigidbodies[rigidbody.name] = rigidbody
+
         logger.info("-- 身体剛体設定終了")
 
         return model
-
-    def create_bone_vertices(self, model: PmxModel):
-        bone_vertices = {}
-        for vertex in model.vertex_dict.values():
-            for bone_idx in vertex.deform.get_idx_list(0.3):
-                if bone_idx not in bone_vertices:
-                    bone_vertices[bone_idx] = []
-                bone = model.bones[model.bone_indexes[bone_idx]]
-                bone_vertices[bone_idx].append(vertex)
-
-                if "捩" in bone.name:
-                    # 捩りは親に入れる
-                    if bone.parent_index not in bone_vertices:
-                        bone_vertices[bone.parent_index] = []
-                    bone_vertices[bone.parent_index].append(vertex)
-                elif bone.getExternalRotationFlag():
-                    # 回転付与の場合、付与親に入れる
-                    if bone.effect_index not in bone_vertices:
-                        bone_vertices[bone.effect_index] = []
-                    bone_vertices[bone.effect_index].append(vertex)
-
-        return bone_vertices
 
     def transfer_astance(self, model: PmxModel):
         # 各頂点
@@ -1786,6 +1887,10 @@ class VroidExportService:
             node_index = -1
             position = MVector3D()
             bone = Bone(bone_param["name"], node_name, position, parent_index, 0, bone_param["flag"])
+            if bone.name in model.bones:
+                # 同一名が既にある場合、スルー（尻対策）
+                continue
+
             if parent_index >= 0:
                 if node_name in node_name_dict:
                     node_index = node_name_dict[node_name]

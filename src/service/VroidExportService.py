@@ -904,6 +904,9 @@ class VroidExportService:
             if len(shape["binds"]) == 0:
                 continue
 
+            if sidx > 0 and sidx % 20 == 0:
+                logger.info("-- -- モーフ調整: %s個目", sidx)
+
             morph_name = shape["name"]
             morph_panel = 4
             if shape["name"] in MORPH_PAIRS:
@@ -922,6 +925,9 @@ class VroidExportService:
 
         # 自前グループモーフ
         for sidx, (morph_name, morph_pair) in enumerate(MORPH_PAIRS.items()):
+            if sidx > 0 and sidx % 20 == 0:
+                logger.info("-- -- 拡張モーフ調整: %s個目", sidx)
+
             if "binds" in morph_pair:
                 # 統合グループモーフ（ある場合だけ）
                 morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 0)
@@ -1242,6 +1248,43 @@ class VroidExportService:
                     mean_position.x() * np.sign(right_bone.position.x()), mean_position.y(), mean_position.z()
                 )
 
+        highlight_material_name = None
+        for (mat_name, material) in model.materials.items():
+            if "EyeHighlight" in material.name:
+                highlight_material_name = mat_name
+                break
+
+        if highlight_material_name:
+            # ハイライトボーンに置き換え
+            for eye_bone_name, highlight_bone_name in [("左目", "左目光"), ("右目", "右目光")]:
+                model.bones[highlight_bone_name].position = model.bones[eye_bone_name].position.copy()
+
+                highlight_vidxs = list(
+                    set(model.material_vertices[highlight_material_name])
+                    & set(model.vertices[model.bones[eye_bone_name].index])
+                )
+
+                for vidx in highlight_vidxs:
+                    v = model.vertex_dict[vidx]
+
+                    if model.bones[eye_bone_name].index in v.deform.get_idx_list():
+                        if type(v.deform) is Bdef1:
+                            v.deform.index0 = model.bones[highlight_bone_name].index
+                        elif type(v.deform) is Bdef2:
+                            if v.deform.index0 == model.bones[eye_bone_name].index:
+                                v.deform.index0 = model.bones[highlight_bone_name].index
+                            if v.deform.index1 == model.bones[eye_bone_name].index:
+                                v.deform.index1 = model.bones[highlight_bone_name].index
+                        elif type(v.deform) is Bdef4:
+                            if v.deform.index0 == model.bones[eye_bone_name].index:
+                                v.deform.index0 = model.bones[highlight_bone_name].index
+                            if v.deform.index1 == model.bones[eye_bone_name].index:
+                                v.deform.index1 = model.bones[highlight_bone_name].index
+                            if v.deform.index2 == model.bones[eye_bone_name].index:
+                                v.deform.index2 = model.bones[highlight_bone_name].index
+                            if v.deform.index3 == model.bones[eye_bone_name].index:
+                                v.deform.index3 = model.bones[highlight_bone_name].index
+
         logger.info("-- ボーンデータ調整終了")
 
         return model
@@ -1371,6 +1414,11 @@ class VroidExportService:
                         )
 
                         model.vertex_dict[vertex_idx] = vertex
+                        # verticesはとりあえずボーンINDEXで管理
+                        for bidx in deform.get_idx_list():
+                            if bidx not in model.vertices:
+                                model.vertices[bidx] = []
+                            model.vertices[bidx].append(vertex_idx)
                         vertex_blocks[vertex_key]["vertices"].append(vertex_idx)
                         vertex_idx += 1
 
@@ -1906,7 +1954,7 @@ class VroidExportService:
                     position = node_dict[node_name_dict["J_Bip_C_Hips"]]["position"] * 0.8
                 elif node_name == "J_Bip_C_Spine2":
                     position = node_dict[node_name_dict["J_Bip_C_Spine"]]["position"].copy()
-                elif node_name == "J_Adj_FaceEye":
+                elif node_name in ["J_Adj_FaceEyeHighlight", "J_Adj_FaceEye"]:
                     position = node_dict[node_name_dict["J_Adj_L_FaceEye"]]["position"] + (
                         (
                             node_dict[node_name_dict["J_Adj_R_FaceEye"]]["position"]
@@ -2134,6 +2182,16 @@ class VroidExportService:
                 if bone.name in ["右目", "左目"] and "両目" in model.bones:
                     bone.flag |= 0x0100
                     bone.effect_index = model.bones["両目"].index
+                    bone.effect_factor = 0.3
+
+                if bone.name in ["両目光"] and "両目" in model.bones:
+                    bone.flag |= 0x0100
+                    bone.effect_index = model.bones["両目"].index
+                    bone.effect_factor = 1
+
+                if bone.name in ["右目光", "左目光"] and "両目光" in model.bones:
+                    bone.flag |= 0x0100
+                    bone.effect_index = model.bones["両目光"].index
                     bone.effect_factor = 0.3
             else:
                 # 人体以外
@@ -2627,6 +2685,39 @@ BONE_PAIRS = {
         "tail": None,
         "display": "顔",
         "flag": 0x0002 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_FaceEyeHighlight": {
+        "name": "両目光",
+        "parent": "J_Adj_FaceEye",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_L_FaceEyeHighlight": {
+        "name": "左目光",
+        "parent": "J_Bip_C_Head",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_R_FaceEyeHighlight": {
+        "name": "右目光",
+        "parent": "J_Bip_C_Head",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
         "rigidbodyGroup": -1,
         "rigidbodyShape": -1,
         "rigidbodyMode": 0,

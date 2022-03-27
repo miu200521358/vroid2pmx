@@ -1428,7 +1428,7 @@ class VroidExportService:
                 vertex_blocks[vertex_key]["materials"].append(primitive["material"])
 
         hair_regexp = r"((N\d+_\d+_Hair_\d+)_HAIR)"
-        hair_tex_regexp = r"_(\d+)"
+        tex_regexp = r"_(\d+)"
 
         indices_by_materials = {}
         materials_by_type = {}
@@ -1507,7 +1507,7 @@ class VroidExportService:
                         hair_img_name = os.path.basename(
                             model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
                         )
-                        hm = re.search(hair_tex_regexp, hair_img_name)
+                        hm = re.search(tex_regexp, hair_img_name)
                         hair_img_number = -1
                         if hm is not None:
                             hair_img_number = int(hm.groups()[0])
@@ -1560,6 +1560,32 @@ class VroidExportService:
                         else:
                             # スペキュラがない場合、ないし反映させない場合、そのまま設定
                             texture_index = material_ext["textureProperties"]["_MainTex"] + 1
+                    elif diffuse_color_data[:] != [1, 1, 1, 1]:
+                        # 基本色が設定されている場合、加算しておく
+                        logger.warning("基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX)
+
+                        base_img_name = os.path.basename(
+                            model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
+                        )
+                        bm = re.search(tex_regexp, base_img_name)
+                        base_img_number = -1
+                        if bm is not None:
+                            base_img_number = int(bm.groups()[0])
+                        base_blend_name = f"_{base_img_number:02d}_blend.png"
+
+                        # スペキュラファイルがある場合
+                        base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
+                        base_ary = np.array(base_img)
+
+                        add_img = Image.fromarray(
+                            np.tile(np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)).astype(np.uint8),
+                            mode="RGBA",
+                        )
+                        base_add_img = ImageChops.multiply(base_img, add_img)
+                        base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
+
+                        model.textures.append(os.path.join("tex", base_blend_name))
+                        texture_index = len(model.textures) - 1
                     else:
                         # そのまま出力
                         texture_index = material_ext["textureProperties"]["_MainTex"] + 1

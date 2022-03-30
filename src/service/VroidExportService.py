@@ -307,7 +307,7 @@ class VroidExportService:
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
                         elif "HoodString" in bone.name:
                             target_names = ["CLOTH"]
-                            parent_bone_name = "首"
+                            parent_bone_name = "上半身3"
                             abb_names[logger.transtext("単一揺れ物")] = "左紐" if "_L_" in bone.name else "右紐"
                             rigidbody_group = "1"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
@@ -1257,6 +1257,12 @@ class VroidExportService:
         if highlight_material_name:
             # ハイライトボーンに置き換え
             for eye_bone_name, highlight_bone_name in [("左目", "左目光"), ("右目", "右目光")]:
+                if (
+                    highlight_material_name not in model.material_vertices
+                    or model.bones[eye_bone_name].index not in model.vertices
+                ):
+                    continue
+
                 model.bones[highlight_bone_name].position = model.bones[eye_bone_name].position.copy()
 
                 highlight_vidxs = list(
@@ -1562,7 +1568,9 @@ class VroidExportService:
                             texture_index = material_ext["textureProperties"]["_MainTex"] + 1
                     elif diffuse_color_data[:] != [1, 1, 1, 1]:
                         # 基本色が設定されている場合、加算しておく
-                        logger.warning("基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX)
+                        logger.warning(
+                            "基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX
+                        )
 
                         base_img_name = os.path.basename(
                             model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
@@ -1578,7 +1586,9 @@ class VroidExportService:
                         base_ary = np.array(base_img)
 
                         add_img = Image.fromarray(
-                            np.tile(np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)).astype(np.uint8),
+                            np.tile(
+                                np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)
+                            ).astype(np.uint8),
                             mode="RGBA",
                         )
                         base_add_img = ImageChops.multiply(base_img, add_img)

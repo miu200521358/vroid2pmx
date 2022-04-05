@@ -189,6 +189,27 @@ class VroidExportService:
             if vidx % 2000 == 0 and vidx > 0:
                 logger.info("-- -- PmxTailor用設定ファイル出力準備 (%s)", vidx)
 
+        hair_bones = {}
+        cat_ear_bones = {}
+        rabbit_ear_bones = {}
+        for bname in model.bones.keys():
+            if "髪" in bname:
+                if bname[:4] not in hair_bones:
+                    hair_bones[bname[:4]] = []
+                hair_bones[bname[:4]].append(bname)
+
+            if "CatEar" in bname:
+                bkey = bname[bname.find("CatEar") - 3 : bname.find("CatEar") + len("CatEar")]
+                if bkey not in cat_ear_bones:
+                    cat_ear_bones[bkey] = []
+                cat_ear_bones[bkey].append(bname)
+
+            if "RabbitEar" in bname:
+                bkey = bname[bname.find("RabbitEar") - 3 : bname.find("RabbitEar") + len("RabbitEar")]
+                if bkey not in rabbit_ear_bones:
+                    rabbit_ear_bones[bkey] = []
+                rabbit_ear_bones[bkey].append(bname)
+
         for bone_group in model.json_data["extensions"]["VRM"]["secondaryAnimation"]["boneGroups"]:
             for bone_bidx in bone_group["bones"]:
                 bone_bname = model.json_data["nodes"][bone_bidx]["name"]
@@ -200,7 +221,7 @@ class VroidExportService:
                         parent_bone_name = None
                         target_names = None
                         abb_names = {}
-                        rigidbody_group = 1
+                        rigidbody_groups = {}
                         target_bones = {}
 
                         if "胸" in bone.name:
@@ -215,19 +236,12 @@ class VroidExportService:
                                 else logger.transtext("胸(大)")
                             )
                             abb_names[target_primitive_name] = bone.name
-                            rigidbody_group = "1"
+                            rigidbody_groups[target_primitive_name] = "1"
                             target_bones[target_primitive_name] = []
                             target_bones[target_primitive_name].append([bone.name, f"{bone.name}先"])
                         elif "髪" in bone.name:
                             target_names = ["HAIR"]
                             parent_bone_name = "頭"
-                            rigidbody_group = "4"
-                            hair_bones = {}
-                            for bname in model.bones.keys():
-                                if "髪" in bname:
-                                    if bname[:4] not in hair_bones:
-                                        hair_bones[bname[:4]] = []
-                                    hair_bones[bname[:4]].append(bname)
 
                             for hbones in hair_bones.values():
                                 if (
@@ -237,14 +251,17 @@ class VroidExportService:
                                     if logger.transtext("髪(アホ毛)") not in target_bones:
                                         target_bones[logger.transtext("髪(アホ毛)")] = []
                                     target_bones[logger.transtext("髪(アホ毛)")].append(hbones)
+                                    rigidbody_groups[logger.transtext("髪(アホ毛)")] = "1"
                                 elif len(hbones) < 4:
                                     if logger.transtext("髪(ショート)") not in target_bones:
                                         target_bones[logger.transtext("髪(ショート)")] = []
                                     target_bones[logger.transtext("髪(ショート)")].append(hbones)
+                                    rigidbody_groups[logger.transtext("髪(ショート)")] = "1"
                                 else:
                                     if logger.transtext("髪(ロング)") not in target_bones:
                                         target_bones[logger.transtext("髪(ロング)")] = []
                                     target_bones[logger.transtext("髪(ロング)")].append(hbones)
+                                    rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
 
                             if logger.transtext("髪(アホ毛)") in target_bones:
                                 abb_names[logger.transtext("髪(アホ毛)")] = "髪H"
@@ -257,65 +274,49 @@ class VroidExportService:
                             target_names = ["CatEar"]
                             parent_bone_name = "頭"
                             abb_names[logger.transtext("髪(ショート)")] = "ネコ耳"
-                            rigidbody_group = "4"
-                            ear_bones = {}
-                            for bname in model.bones.keys():
-                                if "CatEar" in bname:
-                                    bkey = bname[bname.find("CatEar") - 3 : bname.find("CatEar") + len("CatEar")]
-                                    if bkey not in ear_bones:
-                                        ear_bones[bkey] = []
-                                    ear_bones[bkey].append(bname)
 
+                            rigidbody_groups[logger.transtext("髪(ショート)")] = "1"
                             target_bones[logger.transtext("髪(ショート)")] = []
-                            for ebones in ear_bones.values():
+                            for ebones in cat_ear_bones.values():
                                 target_bones[logger.transtext("髪(ショート)")].append(ebones)
                         elif "RabbitEar" in bone.name:
                             target_names = ["RabbitEar"]
                             parent_bone_name = "頭"
                             abb_names[logger.transtext("髪(ロング)")] = "ウサ耳"
-                            rigidbody_group = "4"
-                            ear_bones = {}
-                            for bname in model.bones.keys():
-                                if "RabbitEar" in bname:
-                                    bkey = bname[
-                                        bname.find("RabbitEar") - 3 : bname.find("RabbitEar") + len("RabbitEar")
-                                    ]
-                                    if bkey not in ear_bones:
-                                        ear_bones[bkey] = []
-                                    ear_bones[bkey].append(bname)
 
+                            rigidbody_groups[logger.transtext("髪(ロング)")] = "1"
                             target_bones[logger.transtext("髪(ロング)")] = []
-                            for ebones in ear_bones.values():
+                            for ebones in rabbit_ear_bones.values():
                                 target_bones[logger.transtext("髪(ロング)")].append(ebones)
                         elif "LowerSleeve" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
                             abb_names[logger.transtext("単一揺れ物")] = "左袖" if "_L_" in bone.name else "右袖"
-                            rigidbody_group = "3"
+                            rigidbody_groups[logger.transtext("単一揺れ物")] = "3"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
                         elif "TipSleeve" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "左手首" if "_L_" in bone.name else "右手首"
                             abb_names[logger.transtext("単一揺れ物")] = "左袖口" if "_L_" in bone.name else "右袖口"
-                            rigidbody_group = "3"
+                            rigidbody_groups[logger.transtext("単一揺れ物")] = "3"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
                         elif "C_Hood" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "首"
                             abb_names[logger.transtext("単一揺れ物")] = "フード"
-                            rigidbody_group = "1"
+                            rigidbody_groups[logger.transtext("単一揺れ物")] = "1"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
                         elif "HoodString" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "上半身3"
                             abb_names[logger.transtext("単一揺れ物")] = "左紐" if "_L_" in bone.name else "右紐"
-                            rigidbody_group = "1"
+                            rigidbody_groups[logger.transtext("単一揺れ物")] = "4"
                             target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
                         elif "Skirt" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "下半身"
                             abb_names[logger.transtext("布(コットン)")] = "Skrt"
-                            rigidbody_group = "7"
+                            rigidbody_groups[logger.transtext("布(コットン)")] = "7"
                             target_bones[logger.transtext("布(コットン)")] = [[]]
                             # スカートは範囲全部
                             for nidx, vertical_name in enumerate(
@@ -338,7 +339,7 @@ class VroidExportService:
                             target_names = ["CLOTH"]
                             parent_bone_name = "下半身"
                             abb_names[logger.transtext("布(デニム)")] = "Coat"
-                            rigidbody_group = "7"
+                            rigidbody_groups[logger.transtext("布(デニム)")] = "7"
                             target_bones[logger.transtext("布(デニム)")] = [[]]
                             # コートは範囲全部
                             for nidx, vertical_name in enumerate(
@@ -374,7 +375,7 @@ class VroidExportService:
                                     tailor_setting["material_name"] = model.materials[target_material_name].name
                                     tailor_setting["parent_bone_name"] = parent_bone_name
                                     tailor_setting["abb_name"] = abb_name
-                                    tailor_setting["group"] = rigidbody_group
+                                    tailor_setting["group"] = rigidbody_groups[primitive_name]
                                     tailor_setting["direction"] = "下"
                                     tailor_setting["primitive"] = primitive_name
                                     tailor_setting["exist_physics_clear"] = logger.transtext("再利用")
@@ -504,12 +505,13 @@ class VroidExportService:
                     # 頭はエルフ耳がある場合があるので、両目の間隔を使う
                     eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3
                     center_vertex[0] = bone.position.x()
-                    center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2
-                    center_vertex[2] = bone.position.z()
+                    # 頭はちょっと前と下にずらす
+                    center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2 - (eye_length * 0.15)
+                    center_vertex[2] = bone.position.z() - (eye_length * 0.3)
                     shape_size = MVector3D(eye_length, eye_length, eye_length)
                 elif "胸" in bone.name:
                     # 胸は奥行き
-                    max_size = diff_size[2] * 0.9
+                    max_size = diff_size[2] * 0.8
                     shape_size = MVector3D(max_size, max_size, max_size)
                     center_vertex = bone.position
                 else:
@@ -562,10 +564,15 @@ class VroidExportService:
                         shape_size = MVector3D(
                             diff_size[1] * (0.2 + skin_offset), abs(axis_vec.x() * 0.7), diff_size[2]
                         )
-                    elif "半身" in bone.name:
+                    elif "上半身" in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(
-                            diff_size[0] * (0.25 + skin_offset), abs(axis_vec.y() * 0.5), diff_size[2]
+                            diff_size[2] * (0.35 + skin_offset), diff_size[1] * (0.3 + skin_offset), diff_size[2]
+                        )
+                    elif "下半身" in bone.name:
+                        # 体幹の場合 / 半径：X, 高さ：Y
+                        shape_size = MVector3D(
+                            diff_size[2] * (0.35 + skin_offset), diff_size[1] * (0.25 + skin_offset), diff_size[2]
                         )
                     elif "首" == bone.name:
                         # 首の場合 / 半径：X, 高さ：Y
@@ -574,7 +581,9 @@ class VroidExportService:
                         )
                     elif "ひざ" in bone.name:
                         # ひざの場合 / 半径：X, 高さ：Y
-                        shape_size = MVector3D(diff_size[0] * (0.6 + skin_offset), abs(axis_vec.y() * 1), diff_size[2])
+                        shape_size = MVector3D(
+                            diff_size[0] * (0.65 + skin_offset), abs(axis_vec.y() * 1), diff_size[2]
+                        )
                     elif "足首" in bone.name:
                         # 足首の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(diff_size[0] * (0.8 + skin_offset), abs(axis_vec.y() * 1), diff_size[2])
@@ -587,14 +596,23 @@ class VroidExportService:
                     # 剛体の位置は基本的にはボーンの間
                     center_vertex = bone.position + (tail_position - bone.position) / 2
 
-                    if "ひざ" in bone.name:
-                        # ひざはふくらはぎがあるので、ちょっと後ろにずらす
-                        center_vertex.setZ(center_vertex.z() + diff_size[2] * 0.15)
+                    if "上半身" in bone.name:
+                        # 上半身はちょっと前にずらす
+                        center_vertex.setZ(center_vertex.z() - (diff_size[2] * 0.1))
 
-                    if "足首" in bone.name:
+                    elif "下半身" in bone.name:
+                        # 体幹はちょっと後ろにずらす
+                        center_vertex.setY(center_vertex.y() - (diff_size[1] * 0.15))
+                        center_vertex.setZ(center_vertex.z() + (diff_size[2] * 0.05))
+
+                    elif "ひざ" in bone.name:
+                        # ひざはふくらはぎがあるので、ちょっと後ろにずらす
+                        center_vertex.setZ(center_vertex.z() + (diff_size[2] * 0.15))
+
+                    elif "足首" in bone.name:
                         # 足首は少し下にずらす
                         center_vertex.setY(center_vertex.y() - (diff_size[1] * 0.15))
-                        center_vertex.setZ(center_vertex.z() + diff_size[2] * 0.15)
+                        center_vertex.setZ(center_vertex.z() + (diff_size[2] * 0.15))
 
             logger.debug(
                 "bone: %s, min: %s, max: %s, center: %s, size: %s",
@@ -624,35 +642,66 @@ class VroidExportService:
             rigidbody.index = len(model.rigidbodies)
             model.rigidbodies[rigidbody.name] = rigidbody
 
-            if "足" == bone.name[-1]:
-                # 足ボーンの場合、尻剛体も追加する
-                max_size = diff_size[2] * 0.52
-                shape_size = MVector3D(max_size, max_size, max_size)
-                center_vertex = MVector3D(
-                    np.average([model.bones["下半身"].position.x(), bone.position.x()], weights=[0.4, 0.6]),
-                    np.average([model.bones["下半身"].position.y(), bone.position.y()], weights=[0.1, 0.9]),
-                    np.mean(vertex_ary[:, 2]),
-                )
+            if "下半身" == bone.name:
+                for leg_bone in [model.bones["右足"], model.bones["左足"]]:
+                    # 下半身ボーンの場合、左右の尻剛体も追加する
+                    # 肌のみであるか
+                    skin_offset = (
+                        0.05
+                        if len(skin_bone_vertices.get(bone.index, []))
+                        + len(skin_bone_vertices.get(leg_bone.index, []))
+                        > 8
+                        else 0
+                    )
 
-                rigidbody = RigidBody(
-                    f"{bone.name[0]}尻",
-                    f"{bone.english_name}_Hip",
-                    bone.index,
-                    collision_group,
-                    no_collision_group,
-                    0,
-                    shape_size,
-                    center_vertex,
-                    MVector3D(),
-                    1,
-                    0.5,
-                    0.5,
-                    0,
-                    0,
-                    rigidbody_mode,
-                )
-                rigidbody.index = len(model.rigidbodies)
-                model.rigidbodies[rigidbody.name] = rigidbody
+                    # 剛体生成対象の場合のみ作成
+                    vertex_list = []
+                    normal_list = []
+                    for vertex in (
+                        skin_bone_vertices.get(bone.index, []) + skin_bone_vertices.get(leg_bone.index, [])
+                        if len(skin_bone_vertices.get(bone.index, []))
+                        + len(skin_bone_vertices.get(leg_bone.index, []))
+                        > 8
+                        else skin_bone_vertices.get(bone.index, [])
+                        + out_skin_bone_vertices.get(bone.index, [])
+                        + skin_bone_vertices.get(leg_bone.index, [])
+                        + out_skin_bone_vertices.get(leg_bone.index, [])
+                    ):
+                        vertex_list.append(vertex.position.data().tolist())
+                        normal_list.append(vertex.normal.data().tolist())
+                    vertex_ary = np.array(vertex_list)
+                    # 最小
+                    min_vertex = np.min(vertex_ary, axis=0)
+                    # 最大
+                    max_vertex = np.max(vertex_ary, axis=0)
+
+                    diff_mean = np.mean(np.abs(max_vertex - min_vertex)) * 0.25
+                    shape_size = MVector3D(diff_mean, diff_mean, diff_mean)
+                    center_vertex = MVector3D(
+                        np.average([leg_bone.position.x(), bone.position.x()], weights=[0.75, 0.25]),
+                        np.average([leg_bone.position.y(), bone.position.y()], weights=[0.8, 0.2]),
+                        bone.position.z() + diff_mean * 0.2,
+                    )
+
+                    rigidbody = RigidBody(
+                        f"{leg_bone.name[0]}尻",
+                        f"{leg_bone.english_name}_Hip",
+                        bone.index,
+                        collision_group,
+                        no_collision_group,
+                        0,
+                        shape_size,
+                        center_vertex,
+                        MVector3D(),
+                        1,
+                        0.5,
+                        0.5,
+                        0,
+                        0,
+                        rigidbody_mode,
+                    )
+                    rigidbody.index = len(model.rigidbodies)
+                    model.rigidbodies[rigidbody.name] = rigidbody
 
         logger.info("-- 身体剛体設定終了")
 
@@ -1005,22 +1054,51 @@ class VroidExportService:
             elif "creates" in morph_pair:
                 # 生成タイプ
                 target_material_vertices = []
+                hide_material_vertices = []
                 face_material_vertices = None
                 for mat_name, mat_vert in model.material_vertices.items():
                     for create_mat_name in morph_pair["creates"]:
                         if create_mat_name in mat_name:
                             target_material_vertices.extend(mat_vert)
+                    for hide_mat_name in morph_pair.get("hides", []):
+                        if hide_mat_name in mat_name:
+                            hide_material_vertices.extend(mat_vert)
                     if "_Face_" in mat_name:
                         face_material_vertices = mat_vert
+
+                target_material_vertices = list(set(target_material_vertices))
+                face_material_vertices = list(set(face_material_vertices))
 
                 if target_material_vertices and face_material_vertices:
                     target_offset = []
 
-                    # 顔の頂点位置データ
-                    face_poses = []
-                    for vidx in face_material_vertices:
+                    # 処理対象の位置データ
+                    target_poses = []
+                    for vidx in target_material_vertices:
                         vertex = model.vertex_dict[vidx]
-                        face_poses.append(vertex.position.data())
+                        target_poses.append(vertex.position.data())
+
+                    # 処理対象頂点を左右に分ける
+                    left_target_poses = np.array(target_poses)[np.where(np.array(target_poses)[:, 0] > 0)]
+                    right_target_poses = np.array(target_poses)[np.where(np.array(target_poses)[:, 0] < 0)]
+
+                    # 顔の頂点位置データ(瞳を閉じた時の状態を基準とする)
+                    face_poses = []
+                    face_indices = []
+                    for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+                        if base_offset.vertex_index in face_material_vertices:
+                            vertex = model.vertex_dict[base_offset.vertex_index]
+                            face_poses.append((base_offset.position_offset + vertex.position).data())
+                            face_indices.append(base_offset.vertex_index)
+
+                    # 顔頂点を左右に分ける
+                    left_face_poses = np.array(face_poses)[np.where(np.array(face_poses)[:, 0] > 0)]
+                    right_face_poses = np.array(face_poses)[np.where(np.array(face_poses)[:, 0] < 0)]
+
+                    for vidx in face_material_vertices:
+                        if vidx not in face_indices:
+                            vertex = model.vertex_dict[vidx]
+                            face_poses.append(vertex.position.data())
 
                     if "brow_" in morph_name:
                         # 眉
@@ -1032,11 +1110,6 @@ class VroidExportService:
                             if "_FaceEyeline_" in mat_name:
                                 eyeline_material_vertices = mat_vert
                                 break
-                        # 処理対象の位置データ
-                        target_poses = []
-                        for vidx in target_material_vertices:
-                            vertex = model.vertex_dict[vidx]
-                            target_poses.append(vertex.position.data())
                         # 目の位置データ
                         eyeline_poses = []
                         if eyeline_material_vertices:
@@ -1067,11 +1140,11 @@ class VroidExportService:
                                 if "_Front" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, 0, -offset_distance))
                                 if "_Front" not in morph_name:
-                                    # 移動後の顔材質との距離を測る
+                                    # 移動後の顔材質とのXY距離を測る
                                     face_distances = np.linalg.norm(
                                         (
-                                            np.array(face_poses)
-                                            - (morph_offset.position_offset + vertex.position).data()
+                                            np.array(face_poses)[:, :2]
+                                            - (morph_offset.position_offset + vertex.position).data()[:2]
                                         ),
                                         ord=2,
                                         axis=1,
@@ -1081,7 +1154,7 @@ class VroidExportService:
                                     # Z方向の補正(一番手前っぽいのに合わせる)
                                     morph_offset.position_offset.setZ(
                                         (
-                                            np.mean(near_face_poses, axis=0)
+                                            np.min(near_face_poses, axis=0)
                                             - (morph_offset.position_offset + vertex.position).data()
                                         )[2]
                                         - 0.01
@@ -1111,21 +1184,107 @@ class VroidExportService:
                                 target_offset.append(
                                     VertexMorphOffset(base_offset.vertex_index, base_offset.position_offset * -1)
                                 )
+                    elif "eye_Hide_Vertex" in morph_name:
+                        for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+                            vertex = model.vertex_dict[base_offset.vertex_index]
+                            if base_offset.vertex_index in hide_material_vertices:
+                                # アイラインは両目ボーンの位置に合わせる
+                                target_offset.append(
+                                    VertexMorphOffset(vertex.index, model.bones["両目"].position - vertex.position)
+                                )
+                            else:
+                                # その他はそのまままばたきの変動
+                                target_offset.append(VertexMorphOffset(vertex.index, base_offset.position_offset))
+
+                        for vidx in target_material_vertices:
+                            vertex = model.vertex_dict[vidx]
+                            morph_offset = VertexMorphOffset(
+                                vertex.index,
+                                MVector3D(),
+                            )
+
+                            # 顔頂点を左右に分ける
+                            target_face_poses = (
+                                left_face_poses if np.sign(vertex.position.x()) > 0 else right_face_poses
+                            )
+                            # 白目材質を真円に広げる
+                            vertex_target_poses = (
+                                left_target_poses if np.sign(vertex.position.x()) > 0 else right_target_poses
+                            )
+                            mean_target_pos = np.mean(vertex_target_poses, axis=0)
+                            min_target_pos = np.min(vertex_target_poses, axis=0)
+                            max_target_pos = np.max(vertex_target_poses, axis=0)
+                            target_diff = (max_target_pos - min_target_pos)[:2]
+                            if target_diff[0] > target_diff[1]:
+                                # 切れ長の目
+                                morph_offset.position_offset.setX(
+                                    abs(
+                                        (
+                                            abs(vertex.position.x() - mean_target_pos[0])
+                                            * target_diff[1]
+                                            / target_diff[0]
+                                        )
+                                        - abs(vertex.position.x() - mean_target_pos[0])
+                                    )
+                                    * np.sign(mean_target_pos[0] - vertex.position.x())
+                                )
+                            else:
+                                # 縦長の目
+                                morph_offset.position_offset.setY(
+                                    abs(
+                                        (
+                                            abs(vertex.position.y() - mean_target_pos[1])
+                                            * target_diff[0]
+                                            / target_diff[1]
+                                        )
+                                        - abs(vertex.position.y() - mean_target_pos[1])
+                                    )
+                                    * np.sign(mean_target_pos[1] - vertex.position.y())
+                                )
+
+                            # 移動後の顔材質と、XY方向に広げた後の頂点とのXY距離を測る
+                            face_distances = np.linalg.norm(
+                                (
+                                    np.array(target_face_poses)[:, :2]
+                                    - (vertex.position + morph_offset.position_offset).data()[:2]
+                                ),
+                                ord=2,
+                                axis=1,
+                            )
+                            # 近い顔頂点の位置
+                            near_face_poses = np.array(target_face_poses)[np.argsort(face_distances)[:4]]
+
+                            # Z方向の補正
+                            morph_offset.position_offset.setZ(
+                                (np.mean(near_face_poses, axis=0) - (vertex.position).data())[2] - 0.02
+                            )
+                            # 白目部分を前に出す
+                            target_offset.append(morph_offset)
 
                     if target_offset:
                         morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 1)
                         morph.index = len(target_morphs)
-                        morph.offsets = target_offset
+                        active_target_offset = []
+                        for to in target_offset:
+                            if (type(to) is VertexMorphOffset and to.position_offset != MVector3D()) or type(
+                                to
+                            ) is not VertexMorphOffset:
+                                # 頂点モーフは値がある場合のみ適用
+                                active_target_offset.append(to)
+                        morph.offsets = active_target_offset
 
                         target_morphs[morph_name] = morph
             elif "material" in morph_pair:
                 # 材質モーフ
+                morph = None
                 for material_index, material in enumerate(model.materials.values()):
                     if morph_pair["material"] in model.textures[material.texture_index]:
                         # 材質名が含まれている場合、対象
-                        morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
-                        morph.index = len(target_morphs)
-                        morph.offsets = [
+                        if not morph:
+                            morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
+                            morph.index = len(target_morphs)
+
+                        morph.offsets.append(
                             MaterialMorphData(
                                 material_index,
                                 1,
@@ -1139,9 +1298,34 @@ class VroidExportService:
                                 MVector4D(),
                                 MVector4D(),
                             )
-                        ]
+                        )
 
-                        target_morphs[morph_name] = morph
+                    elif "hides" in morph_pair and np.count_nonzero(
+                        [material.name.endswith(hide_morph) for hide_morph in morph_pair["hides"]]
+                    ):
+                        # 隠す材質名が含まれている場合、対象
+                        if not morph:
+                            morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
+                            morph.index = len(target_morphs)
+
+                        morph.offsets.append(
+                            MaterialMorphData(
+                                material_index,
+                                0,
+                                MVector4D(0, 0, 0, 0),
+                                MVector3D(),
+                                0,
+                                MVector3D(),
+                                MVector4D(),
+                                0,
+                                MVector4D(),
+                                MVector4D(),
+                                MVector4D(),
+                            )
+                        )
+
+                if morph:
+                    target_morphs[morph_name] = morph
             else:
                 if morph_name in target_morphs:
                     morph = target_morphs[morph_name]
@@ -1581,7 +1765,6 @@ class VroidExportService:
                             base_img_number = int(bm.groups()[0])
                         base_blend_name = f"_{base_img_number:02d}_blend.png"
 
-                        # スペキュラファイルがある場合
                         base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
                         base_ary = np.array(base_img)
 
@@ -1715,6 +1898,12 @@ class VroidExportService:
                         append_materials = [("eye_star", "星", "Star"), ("eye_heart", "ハート", "Heart")]
                     elif "_Face_" in material.english_name:
                         append_materials = [("cheek_dye", "頬染め", "Cheek_dye")]
+                    elif material_type == "EyeWhite":
+                        append_materials = [
+                            ("eye_hau", "はぅ", "Hau"),
+                            ("eye_hachume", "はちゅ目", "Hachume"),
+                            ("eye_nagomi", "なごみ", "Nagomi"),
+                        ]
 
                     if append_materials:
                         # 目材質追加
@@ -3975,6 +4164,43 @@ MORPH_PAIRS = {
         "panel": MORPH_EYE,
         "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"],
         "ratios": [1, 1, 1, 1],
+    },
+    "eye_Hide_Vertex": {"name": "目隠し頂点", "panel": MORPH_EYE, "creates": ["EyeWhite"], "hides": ["Eyeline", "Eyelash"]},
+    "eye_Hau_Material": {
+        "name": "はぅ材質",
+        "panel": MORPH_EYE,
+        "material": "eye_hau",
+        "hides": ["EyeWhite", "Eyeline", "Eyelash"],
+    },
+    "eye_Hau": {
+        "name": "はぅ",
+        "panel": MORPH_EYE,
+        "binds": ["eye_Hau_Material", "eye_Hide_Vertex"],
+        "ratios": [1, 1.2],
+    },
+    "eye_Hachume_Material": {
+        "name": "はちゅ目材質",
+        "panel": MORPH_EYE,
+        "material": "eye_hachume",
+        "hides": ["EyeWhite", "Eyeline", "Eyelash"],
+    },
+    "eye_Hachume": {
+        "name": "はちゅ目",
+        "panel": MORPH_EYE,
+        "binds": ["eye_Hachume_Material", "eye_Hide_Vertex"],
+        "ratios": [1, 1.2],
+    },
+    "eye_Nagomi_Material": {
+        "name": "なごみ材質",
+        "panel": MORPH_EYE,
+        "material": "eye_nagomi",
+        "hides": ["EyeWhite", "Eyeline", "Eyelash"],
+    },
+    "eye_Nagomi": {
+        "name": "なごみ",
+        "panel": MORPH_EYE,
+        "binds": ["eye_Nagomi_Material", "eye_Hide_Vertex"],
+        "ratios": [1, 1.2],
     },
     "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
     "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},

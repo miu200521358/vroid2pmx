@@ -678,7 +678,7 @@ class VroidExportService:
                     diff_mean = np.mean(np.abs(max_vertex - min_vertex)) * 0.25
                     shape_size = MVector3D(diff_mean, diff_mean, diff_mean)
                     center_vertex = MVector3D(
-                        np.average([leg_bone.position.x(), bone.position.x()], weights=[0.75, 0.25]),
+                        np.average([leg_bone.position.x(), bone.position.x()], weights=[0.7, 0.3]),
                         np.average([leg_bone.position.y(), bone.position.y()], weights=[0.8, 0.2]),
                         bone.position.z() + diff_mean * 0.2,
                     )

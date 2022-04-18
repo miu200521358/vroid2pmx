@@ -157,6 +157,10 @@ Vroid2Pmx_1.01.00_β07 (2022/04/03)
 ・身体剛体の位置・サイズを調整
 ・PmxTailor用設定ファイル出力処理調整（同一処理をまとめた）
 
+https://fire.st/0vlny43
+Vroid2Pmx_1.01.00_β08 (2022/04/19)
+・身体剛体の位置・サイズを調整
+
 
 
 Vroid2Pmx_1.01.00_β07 をβリリースしました！
@@ -173,7 +177,7 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-https://fire.st/Ig2obN1
+https://fire.st/0vlny43
 <br>
 <br>
 ・自動生成モーフ追加<br>

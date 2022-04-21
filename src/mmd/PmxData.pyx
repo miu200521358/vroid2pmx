@@ -33,7 +33,7 @@ class Bdef1(Deform):
         return "<Bdef1 {0}>".format(self.index0)
 
     def copy(self):
-        return Bdef2(self.index0)
+        return Bdef1(self.index0)
 
 class Bdef2(Deform):
     def __init__(self, index0, index1, weight0):

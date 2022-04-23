@@ -261,7 +261,7 @@ class VroidExportService:
                                     if logger.transtext("髪(ロング)") not in target_bones:
                                         target_bones[logger.transtext("髪(ロング)")] = []
                                     target_bones[logger.transtext("髪(ロング)")].append(hbones)
-                                    rigidbody_groups[logger.transtext("髪(ロング)")] = "5"
+                                    rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
 
                             if logger.transtext("髪(アホ毛)") in target_bones:
                                 abb_names[logger.transtext("髪(アホ毛)")] = "髪H"
@@ -273,21 +273,19 @@ class VroidExportService:
                         elif "CatEar" in bone.name:
                             target_names = ["CatEar"]
                             parent_bone_name = "頭"
-                            abb_names[logger.transtext("髪(ショート)")] = "ネコ耳"
-
+                            abb_names[logger.transtext("髪(ショート)")] = "左猫耳" if "_L_" in bone.name else "右猫耳"
                             rigidbody_groups[logger.transtext("髪(ショート)")] = "4"
-                            target_bones[logger.transtext("髪(ショート)")] = []
-                            for ebones in cat_ear_bones.values():
-                                target_bones[logger.transtext("髪(ショート)")].append(ebones)
+                            target_bones[logger.transtext("髪(ショート)")] = [[]]
+                            for ebones in cat_ear_bones[("_L_CatEar" if "_L_" in bone.name else "_R_CatEar")]:
+                                target_bones[logger.transtext("髪(ショート)")][-1].append(ebones)
                         elif "RabbitEar" in bone.name:
                             target_names = ["RabbitEar"]
                             parent_bone_name = "頭"
-                            abb_names[logger.transtext("髪(ロング)")] = "ウサ耳"
-
+                            abb_names[logger.transtext("髪(ロング)")] = "左兎耳" if "_L_" in bone.name else "右兎耳"
                             rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
-                            target_bones[logger.transtext("髪(ロング)")] = []
-                            for ebones in rabbit_ear_bones.values():
-                                target_bones[logger.transtext("髪(ロング)")].append(ebones)
+                            target_bones[logger.transtext("髪(ロング)")] = [[]]
+                            for ebones in rabbit_ear_bones[("_L_RabbitEar" if "_L_" in bone.name else "_R_RabbitEar")]:
+                                target_bones[logger.transtext("髪(ロング)")][-1].append(ebones)
                         elif "LowerSleeve" in bone.name:
                             target_names = ["CLOTH"]
                             parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
@@ -372,7 +370,8 @@ class VroidExportService:
                                 if primitive_target_bones[-1]:
                                     abb_name = abb_names[primitive_name]
                                     tailor_setting = {}
-                                    tailor_setting["material_name"] = model.materials[target_material_name].name
+                                    mname = model.materials[target_material_name].name
+                                    tailor_setting["material_name"] = mname
                                     tailor_setting["parent_bone_name"] = parent_bone_name
                                     tailor_setting["abb_name"] = abb_name
                                     tailor_setting["group"] = rigidbody_groups[primitive_name]
@@ -380,6 +379,9 @@ class VroidExportService:
                                     tailor_setting["primitive"] = primitive_name
                                     tailor_setting["exist_physics_clear"] = logger.transtext("再利用")
                                     tailor_setting["target_bones"] = primitive_target_bones
+                                    tailor_setting["back_material_name"] = (
+                                        f"{mname}_エッジ" if f"{mname}_エッジ" in model.materials else ""
+                                    )
 
                                     with open(
                                         os.path.join(setting_dir_path, f"{abb_name}.json"), "w", encoding="utf-8"
@@ -392,7 +394,7 @@ class VroidExportService:
 
                 logger.info("-- -- PmxTailor用設定ファイル出力 (%s)", bone.name)
 
-                if not re.search(r"HoodString|Sleeve|Bust", bone_bname):
+                if not re.search(r"HoodString|Sleeve|Bust|CatEar|RabbitEar", bone_bname):
                     # 袖・フードの紐は別々に設定が必要なのでbreakしない
                     break
 
@@ -1947,94 +1949,123 @@ class VroidExportService:
                         # エッジ設定可能材質でエッジサイズが指定されている場合、エッジON
                         material.flag |= 0x10
 
-                    elif material_type in ["MASK", "BLEND"] and material.edge_size > 0:
-                        # 一般材質（服系）に透明部分がある、かつエッジがある場合、エッジ材質を作る
+                    elif material_type in ["MASK", "BLEND"] and material.edge_size > 0 and material.texture_index > 0:
+                        # 一般材質（服系）に透明部分がある、かつエッジがある、かつテクスチャがある場合
 
-                        for index_accessor, indices in indices_by_materials[material_name].items():
-                            for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                        # 該当テクスチャを読み込み
+                        tex_ary = np.array(
+                            Image.open(
+                                os.path.join(tex_dir_path, os.path.basename(model.textures[material.texture_index]))
+                            ).convert("RGBA")
+                        )
+                        is_append_edge_material = False
+                        for vidx in model.material_vertices[material_name]:
+                            v = model.vertex_dict[vidx]
+                            # テクスチャのuvの位置を取得
+                            uv_idx = (tex_ary.shape[:2] * v.uv.data()).astype(np.int)
+                            if (
+                                uv_idx[0] < tex_ary.shape[0]
+                                and uv_idx[1] < tex_ary.shape[1]
+                                and tex_ary[uv_idx[0], uv_idx[1]][3] < 255
+                            ):
+                                logger.info(
+                                    "テクスチャの透明部分がUVに含まれているため、エッジ材質を作成します 材質名: %s",
+                                    material.name,
+                                    decoration=MLogger.DECORATION_BOX,
+                                )
+                                is_append_edge_material = True
+                                break
 
-                                # 一般材質（服系）に透明部分がある、かつエッジがある場合、エッジ用に頂点を複製する
-                                v0 = model.vertex_dict[v0_idx].copy()
-                                v0.index = len(model.vertex_dict)
-                                model.vertex_dict[v0.index] = v0
+                        if is_append_edge_material:
+                            # エッジ材質を追加する場合
+                            for index_accessor, indices in indices_by_materials[material_name].items():
+                                for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
 
-                                v1 = model.vertex_dict[v1_idx].copy()
-                                v1.index = len(model.vertex_dict)
-                                model.vertex_dict[v1.index] = v1
+                                    # 一般材質（服系）に透明部分がある、かつエッジがある場合、エッジ用に頂点を複製する
+                                    v0 = model.vertex_dict[v0_idx].copy()
+                                    v0.index = len(model.vertex_dict)
+                                    model.vertex_dict[v0.index] = v0
 
-                                v2 = model.vertex_dict[v2_idx].copy()
-                                v2.index = len(model.vertex_dict)
-                                model.vertex_dict[v2.index] = v2
+                                    v1 = model.vertex_dict[v1_idx].copy()
+                                    v1.index = len(model.vertex_dict)
+                                    model.vertex_dict[v1.index] = v1
 
-                                for v in [v0, v1, v2]:
-                                    # 法線を反転させる
-                                    v.normal *= -1
-                                    v.normal.normalize()
+                                    v2 = model.vertex_dict[v2_idx].copy()
+                                    v2.index = len(model.vertex_dict)
+                                    model.vertex_dict[v2.index] = v2
 
-                                # 裏面として貼り付けるので、INDEXの順番はそのまま
-                                model.indices[index_idx] = [v0.index, v1.index, v2.index]
-                                index_idx += 1
+                                    for v in [v0, v1, v2]:
+                                        # 法線を反転させる
+                                        v.normal *= -1
+                                        v.normal.normalize()
 
-                                if v0.index not in model.material_vertices[material_name]:
-                                    model.material_vertices[material_name].append(v0.index)
+                                    # 裏面として貼り付けるので、INDEXの順番はそのまま
+                                    model.indices[index_idx] = [v0.index, v1.index, v2.index]
+                                    index_idx += 1
 
-                                if v1.index not in model.material_vertices[material_name]:
-                                    model.material_vertices[material_name].append(v1.index)
+                                    if v0.index not in model.material_vertices[material_name]:
+                                        model.material_vertices[material_name].append(v0.index)
 
-                                if v2.index not in model.material_vertices[material_name]:
-                                    model.material_vertices[material_name].append(v2.index)
+                                    if v1.index not in model.material_vertices[material_name]:
+                                        model.material_vertices[material_name].append(v1.index)
 
-                        # 元材質の両面描画をOFFにする
-                        material.flag -= 0x01
+                                    if v2.index not in model.material_vertices[material_name]:
+                                        model.material_vertices[material_name].append(v2.index)
 
-                        edge_material = copy.deepcopy(material)
-                        edge_material.name = f"{material.name}_エッジ"
-                        edge_material.english_name = f"{material_name}_Edge"
-                        # エッジ色を拡散色と環境色に設定
-                        edge_material.diffuse_color = MVector3D(material.edge_color.data()[:-1])
-                        edge_material.ambient_color = edge_material.diffuse_color / 2
-                        model.materials[edge_material.name] = edge_material
-                        model.material_vertices[edge_material.name] = []
+                            # 元材質の両面描画をOFFにする
+                            material.flag -= 0x01
 
-                        # 元材質の面個数を追加(裏面材質には含めないため、複製後)
-                        material.vertex_count *= 2
+                            edge_material = copy.deepcopy(material)
+                            edge_material.name = f"{material.name}_エッジ"
+                            edge_material.english_name = f"{material_name}_Edge"
+                            # エッジ色を拡散色と環境色に設定
+                            edge_material.diffuse_color = MVector3D(material.edge_color.data()[:-1])
+                            edge_material.ambient_color = edge_material.diffuse_color / 2
+                            model.materials[edge_material.name] = edge_material
+                            model.material_vertices[edge_material.name] = []
 
-                        for index_accessor, indices in indices_by_materials[material_name].items():
-                            for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
-                                # 頂点を複製
-                                v0 = model.vertex_dict[v0_idx].copy()
-                                v0.index = len(model.vertex_dict)
-                                model.vertex_dict[v0.index] = v0
+                            # 元材質の面個数を追加(裏面材質には含めないため、複製後)
+                            material.vertex_count *= 2
 
-                                v1 = model.vertex_dict[v1_idx].copy()
-                                v1.index = len(model.vertex_dict)
-                                model.vertex_dict[v1.index] = v1
+                            for index_accessor, indices in indices_by_materials[material_name].items():
+                                for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                                    # 頂点を複製
+                                    v0 = model.vertex_dict[v0_idx].copy()
+                                    v0.index = len(model.vertex_dict)
+                                    model.vertex_dict[v0.index] = v0
 
-                                v2 = model.vertex_dict[v2_idx].copy()
-                                v2.index = len(model.vertex_dict)
-                                model.vertex_dict[v2.index] = v2
+                                    v1 = model.vertex_dict[v1_idx].copy()
+                                    v1.index = len(model.vertex_dict)
+                                    model.vertex_dict[v1.index] = v1
 
-                                for v in [v0, v1, v2]:
-                                    # 元の頂点の法線として保持
-                                    original_normal = v.normal.copy()
-                                    # 法線を反転させる
-                                    v.normal *= -1
-                                    v.normal.normalize()
-                                    # 元の法線方向に少し拡大する
-                                    v.position += original_normal * (material.edge_size * 0.012)
+                                    v2 = model.vertex_dict[v2_idx].copy()
+                                    v2.index = len(model.vertex_dict)
+                                    model.vertex_dict[v2.index] = v2
 
-                                # 裏面として貼り付けるので、INDEXの順番はそのまま
-                                model.indices[index_idx] = [v0.index, v1.index, v2.index]
-                                index_idx += 1
+                                    for v in [v0, v1, v2]:
+                                        # 元の頂点の法線として保持
+                                        original_normal = v.normal.copy()
+                                        # 法線を反転させる
+                                        v.normal *= -1
+                                        v.normal.normalize()
+                                        # 元の法線方向に少し拡大する
+                                        v.position += original_normal * (material.edge_size * 0.02)
 
-                                if v0.index not in model.material_vertices[edge_material.name]:
-                                    model.material_vertices[edge_material.name].append(v0.index)
+                                    # 裏面として貼り付けるので、INDEXの順番はそのまま
+                                    model.indices[index_idx] = [v0.index, v1.index, v2.index]
+                                    index_idx += 1
 
-                                if v1.index not in model.material_vertices[edge_material.name]:
-                                    model.material_vertices[edge_material.name].append(v1.index)
+                                    if v0.index not in model.material_vertices[edge_material.name]:
+                                        model.material_vertices[edge_material.name].append(v0.index)
 
-                                if v2.index not in model.material_vertices[edge_material.name]:
-                                    model.material_vertices[edge_material.name].append(v2.index)
+                                    if v1.index not in model.material_vertices[edge_material.name]:
+                                        model.material_vertices[edge_material.name].append(v1.index)
+
+                                    if v2.index not in model.material_vertices[edge_material.name]:
+                                        model.material_vertices[edge_material.name].append(v2.index)
+                        else:
+                            # エッジ材質を追加しない場合、エッジFLG=ON
+                            material.flag |= 0x10
 
         logger.info("-- 頂点・面・材質データ解析終了")
 

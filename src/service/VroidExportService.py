@@ -1328,6 +1328,56 @@ class VroidExportService:
 
                 if morph:
                     target_morphs[morph_name] = morph
+            elif "edge" in morph_pair:
+                # エッジOFF
+                morph = None
+                for material_index, material in enumerate(model.materials.values()):
+                    if (material.flag & 0x10) != 0:
+                        if not morph:
+                            morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
+                            morph.index = len(target_morphs)
+
+                        # エッジONの場合、OFFにするモーフ追加
+                        morph.offsets.append(
+                            MaterialMorphData(
+                                material_index,
+                                0,
+                                MVector4D(1, 1, 1, 1),
+                                MVector3D(1, 1, 1),
+                                1,
+                                MVector3D(1, 1, 1),
+                                # エッジのサイズと透明度だけ0
+                                MVector4D(1, 1, 1, 0),
+                                0,
+                                MVector4D(1, 1, 1, 1),
+                                MVector4D(1, 1, 1, 1),
+                                MVector4D(1, 1, 1, 1),
+                            )
+                        )
+                    elif material.name.endswith("_エッジ"):
+                        # エッジ材質の場合、全部OFF
+                        if not morph:
+                            morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 8)
+                            morph.index = len(target_morphs)
+
+                        morph.offsets.append(
+                            MaterialMorphData(
+                                material_index,
+                                0,
+                                MVector4D(0, 0, 0, 0),
+                                MVector3D(),
+                                0,
+                                MVector3D(),
+                                MVector4D(),
+                                0,
+                                MVector4D(),
+                                MVector4D(),
+                                MVector4D(),
+                            )
+                        )
+
+                if morph:
+                    target_morphs[morph_name] = morph
             else:
                 if morph_name in target_morphs:
                     morph = target_morphs[morph_name]
@@ -4466,4 +4516,5 @@ MORPH_PAIRS = {
     "Fcl_ALL_Joy": {"name": "喜", "panel": MORPH_OTHER},
     "Fcl_ALL_Sorrow": {"name": "哀", "panel": MORPH_OTHER},
     "Fcl_ALL_Surprised": {"name": "驚", "panel": MORPH_OTHER},
+    "Edge_Off": {"name": "エッジOFF", "panel": MORPH_OTHER, "edge": True},
 }

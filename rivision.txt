@@ -183,6 +183,12 @@ https://fire.st/TsIwUzA
 Vroid2Pmx_1.01.00_β11 (2022/04/26)
 ・エッジOFFモーフ追加
 
+https://fire.st/jMm5ahF
+Vroid2Pmx_1.01.00_β12 (2022/05/12)
+・登録対象外頂点モーフも出力だけは行うよう調整
+※これ以上のVRoid外vrm対応は行いません
+
+
 
 
 
@@ -200,14 +206,10 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-https://fire.st/zhMbsGP
+https://fire.st/jMm5ahF
 <br>
 <br>
-・エッジが指定されている場合に、エッジを出せるように調整<br>
-　・透明・半透明部分がある材質の場合　…　エッジ用材質追加
-　・不透明のみの場合　…　エッジFLG=ON
-・PmxTailor用設定の剛体グループを調整<br>
-・ケモ耳を左右別々のPmxTailor用物理に設定<br>
-　・ケモ耳を物理を入れつつ垂れさせるとか<br>
+・登録対象外頂点モーフも出力だけは行うよう調整<br>
+※これ以上のVRoid外vrm対応は行いません<br>
 <br>
 ぜひ使っていただいて、感想・不具合報告等お願いいたします。<br>

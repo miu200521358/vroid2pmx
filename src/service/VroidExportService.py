@@ -947,6 +947,7 @@ class VroidExportService:
             return model
 
         # 一旦置き換えて、既存はクリア
+        vertex_morphs = copy.deepcopy(model.org_morphs)
         target_morphs = copy.deepcopy(model.org_morphs)
         model.org_morphs = {}
 
@@ -1400,8 +1401,16 @@ class VroidExportService:
                 for offset in morph.offsets:
                     old_idx = offset.morph_index
                     offset.morph_index = target_morph_indexes[old_idx]
-            if "材質" not in morph.name:
+            if "材質" not in morph.name and "頂点" not in morph.name:
                 model.display_slots["表情"].references.append((1, morph.index))
+
+        for morph_name, morph in vertex_morphs.items():
+            # 定義外モーフがあれば一応取り込む（表示枠には追加しない）
+            if morph_name in MORPH_PAIRS.keys() and (morph_name in target_morphs or morph.name in target_morphs or morph.english_name in target_morphs):
+                continue
+            target_morph_indexes[morph.index] = len(model.org_morphs)
+            morph.index = len(model.org_morphs)
+            model.org_morphs[morph.name] = morph
 
         logger.info("-- グループモーフデータ解析")
 
@@ -4429,6 +4438,7 @@ MORPH_PAIRS = {
     "Fcl_MTH_E": {"name": "え", "panel": MORPH_LIP},
     "Fcl_MTH_O": {"name": "お", "panel": MORPH_LIP},
     "Fcl_MTH_Neutral": {"name": "ん", "panel": MORPH_LIP},
+    "Fcl_MTH_Close": {"name": "一文字", "panel": MORPH_LIP},
     "Fcl_MTH_Up": {"name": "口上", "panel": MORPH_LIP},
     "Fcl_MTH_Down": {"name": "口下", "panel": MORPH_LIP},
     "Fcl_MTH_Angry_R": {"name": "Λ右", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},

@@ -50,7 +50,7 @@ from mmd.VmdData import (
     VmdShadowFrame,
     VmdShowIkFrame,
 )
-from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4
+from module.MMath import MVector2D, MVector3D, MVector4D, MQuaternion, MMatrix4x4, MQuaternion
 from utils import MServiceUtils, MFileUtils
 from utils.MLogger import MLogger
 from utils.MException import SizingException, MKilledException
@@ -953,6 +953,8 @@ class VroidExportService:
         target_morphs = copy.deepcopy(model.org_morphs)
         model.org_morphs = {}
 
+        logger.info("-- -- モーフ調整準備")
+
         face_close_dict = {}
         for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
             face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
@@ -995,7 +997,7 @@ class VroidExportService:
             if len(shape["binds"]) == 0:
                 continue
 
-            if sidx > 0 and sidx % 20 == 0:
+            if sidx > 0 and sidx % 10 == 0:
                 logger.info("-- -- モーフ調整: %s個目", sidx)
 
             morph_name = shape["name"]
@@ -1013,6 +1015,8 @@ class VroidExportService:
                 for bind in shape["binds"]:
                     morph.offsets.append(GroupMorphData(bind["index"], bind["weight"] / 100))
             target_morphs[morph_name] = morph
+
+        logger.info("-- -- モーフ調整: %s個目", sidx)
 
         # 自前グループモーフ
         for sidx, (morph_name, morph_pair) in enumerate(MORPH_PAIRS.items()):
@@ -1282,7 +1286,9 @@ class VroidExportService:
                                     * np.sign(mean_target_pos[1] - vertex.position.y())
                                 )
 
-                            morph_offset.position_offset += (vertex.position - MVector3D(mean_target_pos)) * MVector3D(0.1, 0.1, 0)
+                            morph_offset.position_offset += (vertex.position - MVector3D(mean_target_pos)) * MVector3D(
+                                0.1, 0.1, 0
+                            )
 
                             morphed_pos = (vertex.position + morph_offset.position_offset).data()
 
@@ -1310,7 +1316,7 @@ class VroidExportService:
                             )
 
                             # Z方向の補正
-                            morph_offset.position_offset.setZ(morphed_nearest_pos[2] - morphed_pos[2] - 0.02)
+                            morph_offset.position_offset.setZ(morphed_nearest_pos[2] - morphed_pos[2] - 0.03)
                             # 白目部分を前に出す
                             target_offset.append(morph_offset)
 
@@ -1429,11 +1435,23 @@ class VroidExportService:
 
                 if morph:
                     target_morphs[morph_name] = morph
+            elif "bone" in morph_pair:
+                morph = Morph(morph_pair["name"], morph_name, morph_pair["panel"], 2)
+                morph.index = len(target_morphs) + 100
+                for bname, move_ratio, rotate_ratio in zip(
+                    morph_pair["bone"],
+                    morph_pair["move_ratios"],
+                    morph_pair["rotate_ratios"],
+                ):
+                    morph.offsets.append(BoneMorphData(model.bones[bname].index, move_ratio, rotate_ratio))
+                target_morphs[morph_name] = morph
             else:
                 if morph_name in target_morphs:
                     morph = target_morphs[morph_name]
                     morph.name = morph_pair["name"]
                     morph.panel = morph_pair["panel"]
+
+        logger.info("-- -- 拡張モーフ調整: %s個目", sidx)
 
         target_morph_indexes = {}
         for morph_name in MORPH_PAIRS.keys():
@@ -1587,6 +1605,79 @@ class VroidExportService:
                                 v.deform.index2 = model.bones[highlight_bone_name].index
                             if v.deform.index3 == model.bones[eye_bone_name].index:
                                 v.deform.index3 = model.bones[highlight_bone_name].index
+
+        tongue_material_name = None
+        for (mat_name, material) in model.materials.items():
+            if "FaceMouth" in material.name:
+                tongue_material_name = mat_name
+                break
+
+        if (
+            tongue_material_name
+            and tongue_material_name in model.material_vertices
+            and model.bones["頭"].index in model.vertices
+            and "舌1" in model.bones
+            and "舌2" in model.bones
+            and "舌3" in model.bones
+            and "舌4" in model.bones
+        ):
+            # 舌ボーンにウェイト置き換え
+            tongue_vidxs = []
+            tongue_vertices = []
+            tongue_poses = []
+            for vidx in model.material_vertices[tongue_material_name]:
+                v = model.vertex_dict[vidx]
+                if v.uv.x() >= 0.5 and v.uv.y() <= 0.5:
+                    tongue_vidxs.append(vidx)
+                    tongue_vertices.append(v)
+                    tongue_poses.append(v.position.data())
+                    v.deform = Bdef1(model.bones["舌1"].index)
+
+            # 舌ボーン位置配置
+            tongue1_pos = np.max(tongue_poses, axis=0)
+            model.bones["舌1"].position = MVector3D(0, tongue1_pos[1], tongue1_pos[2])
+            tongue4_pos = np.min(tongue_poses, axis=0)
+            model.bones["舌4"].position = MVector3D(0, tongue4_pos[1], tongue4_pos[2])
+            model.bones["舌2"].position = model.bones["舌1"].position + (
+                (model.bones["舌4"].position - model.bones["舌1"].position) * 0.4
+            )
+            model.bones["舌3"].position = model.bones["舌1"].position + (
+                (model.bones["舌4"].position - model.bones["舌1"].position) * 0.7
+            )
+
+            for from_bone_name, to_bone_name in [("舌1", "舌2"), ("舌2", "舌3"), ("舌3", "舌4")]:
+                # ローカル軸
+                model.bones[from_bone_name].local_x_vector = (
+                    model.bones[to_bone_name].position - model.bones[from_bone_name].position
+                ).normalized()
+                model.bones[from_bone_name].local_z_vector = MVector3D.crossProduct(
+                    model.bones[from_bone_name].local_x_vector, MVector3D(0, -1, 0)
+                ).normalized()
+            model.bones["舌4"].local_x_vector = model.bones["舌3"].local_x_vector.copy()
+            model.bones["舌4"].local_z_vector = model.bones["舌3"].local_z_vector.copy()
+
+            for vertex in tongue_vertices:
+                for from_bone_name, to_bone_name in [("舌1", "舌2"), ("舌2", "舌3"), ("舌3", "舌4")]:
+                    tongue_distance = model.bones[to_bone_name].position.z() - model.bones[from_bone_name].position.z()
+                    vertex_distance = vertex.position.z() - model.bones[from_bone_name].position.z()
+
+                    if np.sign(tongue_distance) == np.sign(vertex_distance):
+                        # 範囲内である場合、ウェイト分布
+                        vertex.deform = Bdef2(
+                            model.bones[to_bone_name].index,
+                            model.bones[from_bone_name].index,
+                            vertex_distance / tongue_distance,
+                        )
+
+            # 舌頂点モーフを削除
+            for morph in model.org_morphs.values():
+                if morph.morph_type == 1:
+                    # 頂点モーフの場合
+                    without_tongue_offsets = []
+                    for offset in morph.offsets:
+                        if offset.vertex_index not in tongue_vidxs:
+                            without_tongue_offsets.append(offset)
+                    morph.offsets = without_tongue_offsets
 
         logger.info("-- ボーンデータ調整終了")
 
@@ -1754,6 +1845,7 @@ class VroidExportService:
                     "_Face_",
                     "_Body_",
                     "_Hair_",
+                    "_HairBack_",
                     "_FaceBrow",
                     "_FaceEyeline",
                     "_FaceEyelash",
@@ -1984,6 +2076,7 @@ class VroidExportService:
             "_Body_",
             "_FaceMouth",
             "_Face_",
+            "_HairBack_",
             "_Hair_",
             "_FaceBrow",
             "_FaceEyeline",
@@ -1998,6 +2091,94 @@ class VroidExportService:
         ]:
             if material_type in materials_by_type:
                 for material_name, material in materials_by_type[material_type].items():
+                    is_append_edge_material = False
+                    is_edge_flg_on = False
+
+                    if material_type in ["_Body_", "_Face_", "_Hair_", "Accessory"] and material.edge_size > 0:
+                        # エッジ設定可能材質でエッジサイズが指定されている場合、エッジON
+                        is_edge_flg_on = True
+
+                    elif material_type in ["MASK", "BLEND"] and material.edge_size > 0 and material.texture_index > 0:
+                        # 一般材質（服系）に透明部分がある、かつエッジがある、かつテクスチャがある場合
+                        is_edge_flg_on = True
+
+                        # 該当テクスチャを読み込み
+                        tex_ary = np.array(
+                            Image.open(
+                                os.path.join(tex_dir_path, os.path.basename(model.textures[material.texture_index]))
+                            ).convert("RGBA")
+                        )
+                        for index_accessor, indices in indices_by_materials[material_name].items():
+                            for vidx in indices:
+                                v = model.vertex_dict[vidx]
+                                # テクスチャのuvの位置を取得
+                                uv_idx = (tex_ary.shape[:2] * v.uv.data()).astype(np.int)
+                                if (
+                                    uv_idx[0] < tex_ary.shape[0]
+                                    and uv_idx[1] < tex_ary.shape[1]
+                                    and tex_ary[uv_idx[0], uv_idx[1]][3] < 255
+                                ):
+                                    logger.info(
+                                        "テクスチャの透明部分がUVに含まれているため、エッジ材質を作成します 材質名: %s",
+                                        material.name,
+                                        decoration=MLogger.DECORATION_BOX,
+                                    )
+                                    is_edge_flg_on = False
+                                    is_append_edge_material = True
+                                    break
+                            if is_append_edge_material:
+                                break
+
+                    if is_append_edge_material:
+                        # 元材質の両面描画をOFFにする(裏もOFFなのでここのタイミング)
+                        material.flag -= 0x01
+
+                        back_material = copy.deepcopy(material)
+                        back_material.name = f"{material.name}_裏"
+                        back_material.english_name = f"{material_name}_Back"
+                        model.materials[back_material.name] = back_material
+                        model.material_vertices[back_material.name] = []
+
+                        # エッジ材質を追加する場合
+                        for index_accessor, indices in indices_by_materials[material_name].items():
+                            for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+
+                                # 一般材質（服系）に透明部分がある、かつエッジがある場合、裏面用に頂点を複製する
+                                v0 = model.vertex_dict[v0_idx].copy()
+                                v0.index = len(model.vertex_dict)
+                                model.vertex_dict[v0.index] = v0
+
+                                v1 = model.vertex_dict[v1_idx].copy()
+                                v1.index = len(model.vertex_dict)
+                                model.vertex_dict[v1.index] = v1
+
+                                v2 = model.vertex_dict[v2_idx].copy()
+                                v2.index = len(model.vertex_dict)
+                                model.vertex_dict[v2.index] = v2
+
+                                for v in [v0, v1, v2]:
+                                    # 法線を反転させる
+                                    v.normal *= -1
+                                    v.normal.normalize()
+
+                                # 裏面として貼り付けるので、INDEXの順番はそのまま
+                                model.indices[index_idx] = [v0.index, v1.index, v2.index]
+                                index_idx += 1
+
+                                if v0.index not in model.material_vertices[back_material.name]:
+                                    model.material_vertices[back_material.name].append(v0.index)
+
+                                if v1.index not in model.material_vertices[back_material.name]:
+                                    model.material_vertices[back_material.name].append(v1.index)
+
+                                if v2.index not in model.material_vertices[back_material.name]:
+                                    model.material_vertices[back_material.name].append(v2.index)
+
+                    # 本来の材質
+                    if is_edge_flg_on:
+                        # エッジ材質を追加しない場合、エッジFLG=ON
+                        material.flag |= 0x10
+
                     model.materials[material_name] = material
                     model.material_vertices[material_name] = []
                     model.material_indices[material_name] = []
@@ -2059,127 +2240,53 @@ class VroidExportService:
                                     if v2_idx not in model.material_vertices[add_material.name]:
                                         model.material_vertices[add_material.name].append(v2_idx)
 
-                    if material_type in ["_Body_", "_Face_", "_Hair_", "Accessory"] and material.edge_size > 0:
-                        # エッジ設定可能材質でエッジサイズが指定されている場合、エッジON
-                        material.flag |= 0x10
+                    if is_append_edge_material:
 
-                    elif material_type in ["MASK", "BLEND"] and material.edge_size > 0 and material.texture_index > 0:
-                        # 一般材質（服系）に透明部分がある、かつエッジがある、かつテクスチャがある場合
+                        edge_material = copy.deepcopy(material)
+                        edge_material.name = f"{material.name}_エッジ"
+                        edge_material.english_name = f"{material_name}_Edge"
+                        # エッジ色を拡散色と環境色に設定
+                        edge_material.diffuse_color = MVector3D(material.edge_color.data()[:-1])
+                        edge_material.ambient_color = edge_material.diffuse_color / 2
+                        model.materials[edge_material.name] = edge_material
+                        model.material_vertices[edge_material.name] = []
 
-                        # 該当テクスチャを読み込み
-                        tex_ary = np.array(
-                            Image.open(
-                                os.path.join(tex_dir_path, os.path.basename(model.textures[material.texture_index]))
-                            ).convert("RGBA")
-                        )
-                        is_append_edge_material = False
-                        for vidx in model.material_vertices[material_name]:
-                            v = model.vertex_dict[vidx]
-                            # テクスチャのuvの位置を取得
-                            uv_idx = (tex_ary.shape[:2] * v.uv.data()).astype(np.int)
-                            if (
-                                uv_idx[0] < tex_ary.shape[0]
-                                and uv_idx[1] < tex_ary.shape[1]
-                                and tex_ary[uv_idx[0], uv_idx[1]][3] < 255
-                            ):
-                                logger.info(
-                                    "テクスチャの透明部分がUVに含まれているため、エッジ材質を作成します 材質名: %s",
-                                    material.name,
-                                    decoration=MLogger.DECORATION_BOX,
-                                )
-                                is_append_edge_material = True
-                                break
+                        for index_accessor, indices in indices_by_materials[material_name].items():
+                            for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                                # 頂点を複製
+                                v0 = model.vertex_dict[v0_idx].copy()
+                                v0.index = len(model.vertex_dict)
+                                model.vertex_dict[v0.index] = v0
 
-                        if is_append_edge_material:
-                            # エッジ材質を追加する場合
-                            for index_accessor, indices in indices_by_materials[material_name].items():
-                                for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                                v1 = model.vertex_dict[v1_idx].copy()
+                                v1.index = len(model.vertex_dict)
+                                model.vertex_dict[v1.index] = v1
 
-                                    # 一般材質（服系）に透明部分がある、かつエッジがある場合、エッジ用に頂点を複製する
-                                    v0 = model.vertex_dict[v0_idx].copy()
-                                    v0.index = len(model.vertex_dict)
-                                    model.vertex_dict[v0.index] = v0
+                                v2 = model.vertex_dict[v2_idx].copy()
+                                v2.index = len(model.vertex_dict)
+                                model.vertex_dict[v2.index] = v2
 
-                                    v1 = model.vertex_dict[v1_idx].copy()
-                                    v1.index = len(model.vertex_dict)
-                                    model.vertex_dict[v1.index] = v1
+                                for v in [v0, v1, v2]:
+                                    # 元の頂点の法線として保持
+                                    original_normal = v.normal.copy()
+                                    # 法線を反転させる
+                                    v.normal *= -1
+                                    v.normal.normalize()
+                                    # 元の法線方向に少し拡大する
+                                    v.position += original_normal * (material.edge_size * 0.02)
 
-                                    v2 = model.vertex_dict[v2_idx].copy()
-                                    v2.index = len(model.vertex_dict)
-                                    model.vertex_dict[v2.index] = v2
+                                # 裏面として貼り付けるので、INDEXの順番はそのまま
+                                model.indices[index_idx] = [v0.index, v1.index, v2.index]
+                                index_idx += 1
 
-                                    for v in [v0, v1, v2]:
-                                        # 法線を反転させる
-                                        v.normal *= -1
-                                        v.normal.normalize()
+                                if v0.index not in model.material_vertices[edge_material.name]:
+                                    model.material_vertices[edge_material.name].append(v0.index)
 
-                                    # 裏面として貼り付けるので、INDEXの順番はそのまま
-                                    model.indices[index_idx] = [v0.index, v1.index, v2.index]
-                                    index_idx += 1
+                                if v1.index not in model.material_vertices[edge_material.name]:
+                                    model.material_vertices[edge_material.name].append(v1.index)
 
-                                    if v0.index not in model.material_vertices[material_name]:
-                                        model.material_vertices[material_name].append(v0.index)
-
-                                    if v1.index not in model.material_vertices[material_name]:
-                                        model.material_vertices[material_name].append(v1.index)
-
-                                    if v2.index not in model.material_vertices[material_name]:
-                                        model.material_vertices[material_name].append(v2.index)
-
-                            # 元材質の両面描画をOFFにする
-                            material.flag -= 0x01
-
-                            edge_material = copy.deepcopy(material)
-                            edge_material.name = f"{material.name}_エッジ"
-                            edge_material.english_name = f"{material_name}_Edge"
-                            # エッジ色を拡散色と環境色に設定
-                            edge_material.diffuse_color = MVector3D(material.edge_color.data()[:-1])
-                            edge_material.ambient_color = edge_material.diffuse_color / 2
-                            model.materials[edge_material.name] = edge_material
-                            model.material_vertices[edge_material.name] = []
-
-                            # 元材質の面個数を追加(裏面材質には含めないため、複製後)
-                            material.vertex_count *= 2
-
-                            for index_accessor, indices in indices_by_materials[material_name].items():
-                                for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
-                                    # 頂点を複製
-                                    v0 = model.vertex_dict[v0_idx].copy()
-                                    v0.index = len(model.vertex_dict)
-                                    model.vertex_dict[v0.index] = v0
-
-                                    v1 = model.vertex_dict[v1_idx].copy()
-                                    v1.index = len(model.vertex_dict)
-                                    model.vertex_dict[v1.index] = v1
-
-                                    v2 = model.vertex_dict[v2_idx].copy()
-                                    v2.index = len(model.vertex_dict)
-                                    model.vertex_dict[v2.index] = v2
-
-                                    for v in [v0, v1, v2]:
-                                        # 元の頂点の法線として保持
-                                        original_normal = v.normal.copy()
-                                        # 法線を反転させる
-                                        v.normal *= -1
-                                        v.normal.normalize()
-                                        # 元の法線方向に少し拡大する
-                                        v.position += original_normal * (material.edge_size * 0.02)
-
-                                    # 裏面として貼り付けるので、INDEXの順番はそのまま
-                                    model.indices[index_idx] = [v0.index, v1.index, v2.index]
-                                    index_idx += 1
-
-                                    if v0.index not in model.material_vertices[edge_material.name]:
-                                        model.material_vertices[edge_material.name].append(v0.index)
-
-                                    if v1.index not in model.material_vertices[edge_material.name]:
-                                        model.material_vertices[edge_material.name].append(v1.index)
-
-                                    if v2.index not in model.material_vertices[edge_material.name]:
-                                        model.material_vertices[edge_material.name].append(v2.index)
-                        else:
-                            # エッジ材質を追加しない場合、エッジFLG=ON
-                            material.flag |= 0x10
+                                if v2.index not in model.material_vertices[edge_material.name]:
+                                    model.material_vertices[edge_material.name].append(v2.index)
 
         logger.info("-- 頂点・面・材質データ解析終了")
 
@@ -3258,6 +3365,50 @@ BONE_PAIRS = {
         "tail": None,
         "display": "顔",
         "flag": 0x0002 | 0x0004 | 0x0008 | 0x0010,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_FaceTongue1": {
+        "name": "舌1",
+        "parent": "J_Bip_C_Head",
+        "tail": "J_Adj_FaceTongue2",
+        "display": "顔",
+        "flag": 0x0001 | 0x0002 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_FaceTongue2": {
+        "name": "舌2",
+        "parent": "J_Adj_FaceTongue1",
+        "tail": "J_Adj_FaceTongue3",
+        "display": "顔",
+        "flag": 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_FaceTongue3": {
+        "name": "舌3",
+        "parent": "J_Adj_FaceTongue2",
+        "tail": "J_Adj_FaceTongue4",
+        "display": "顔",
+        "flag": 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0800,
+        "rigidbodyGroup": -1,
+        "rigidbodyShape": -1,
+        "rigidbodyMode": 0,
+        "rigidbodyNoColl": None,
+    },
+    "J_Adj_FaceTongue4": {
+        "name": "舌4",
+        "parent": "J_Adj_FaceTongue3",
+        "tail": None,
+        "display": "顔",
+        "flag": 0x0001 | 0x0002 | 0x0004 | 0x0008 | 0x0010 | 0x0800,
         "rigidbodyGroup": -1,
         "rigidbodyShape": -1,
         "rigidbodyMode": 0,
@@ -4552,11 +4703,111 @@ MORPH_PAIRS = {
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
     "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
-    "Fcl_MTH_A": {"name": "あ", "panel": MORPH_LIP},
-    "Fcl_MTH_I": {"name": "い", "panel": MORPH_LIP},
-    "Fcl_MTH_U": {"name": "う", "panel": MORPH_LIP},
-    "Fcl_MTH_E": {"name": "え", "panel": MORPH_LIP},
-    "Fcl_MTH_O": {"name": "お", "panel": MORPH_LIP},
+    "Fcl_MTH_A": {"name": "あ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_A_Bone": {
+        "name": "あボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-16, 0, 0),
+            MQuaternion.fromEulerAngles(-16, 0, 0),
+            MQuaternion.fromEulerAngles(-10, 0, 0),
+        ],
+    },
+    "Fcl_MTH_A_Group": {"name": "あ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_A", "Fcl_MTH_A_Bone"]},
+    "Fcl_MTH_I": {"name": "い頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_I_Bone": {
+        "name": "いボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-3, 0, 0),
+        ],
+    },
+    "Fcl_MTH_I_Group": {"name": "い", "panel": MORPH_LIP, "binds": ["Fcl_MTH_I", "Fcl_MTH_I_Bone"]},
+    "Fcl_MTH_U": {"name": "う頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_U_Bone": {
+        "name": "うボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-16, 0, 0),
+            MQuaternion.fromEulerAngles(-16, 0, 0),
+            MQuaternion.fromEulerAngles(-10, 0, 0),
+        ],
+    },
+    "Fcl_MTH_U_Group": {"name": "う", "panel": MORPH_LIP, "binds": ["Fcl_MTH_U", "Fcl_MTH_U_Bone"]},
+    "Fcl_MTH_E": {"name": "え頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_E_Bone": {
+        "name": "えボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-3, 0, 0),
+        ],
+    },
+    "Fcl_MTH_E_Group": {"name": "え", "panel": MORPH_LIP, "binds": ["Fcl_MTH_E", "Fcl_MTH_E_Bone"]},
+    "Fcl_MTH_O": {"name": "お頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_O_Bone": {
+        "name": "おボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-20, 0, 0),
+            MQuaternion.fromEulerAngles(-18, 0, 0),
+            MQuaternion.fromEulerAngles(-12, 0, 0),
+        ],
+    },
+    "Fcl_MTH_O_Group": {"name": "お", "panel": MORPH_LIP, "binds": ["Fcl_MTH_O", "Fcl_MTH_O_Bone"]},
     "Fcl_MTH_Neutral": {"name": "ん", "panel": MORPH_LIP},
     "Fcl_MTH_Close": {"name": "一文字", "panel": MORPH_LIP},
     "Fcl_MTH_Up": {"name": "口上", "panel": MORPH_LIP},
@@ -4569,27 +4820,150 @@ MORPH_PAIRS = {
     "Fcl_MTH_Fun_R": {"name": "にっこり右", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
     "Fcl_MTH_Fun_L": {"name": "にっこり左", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
     "Fcl_MTH_Fun": {"name": "にっこり", "panel": MORPH_LIP},
-    "Fcl_MTH_Niyari_R": {
+    "Fcl_MTH_Niko_R": {
         "name": "にこ右",
         "panel": MORPH_LIP,
         "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Large"],
-        "ratios": [1, -0.5]
+        "ratios": [1, -0.3],
     },
-    "Fcl_MTH_Niyari_L": {
+    "Fcl_MTH_Niko_L": {
         "name": "にこ左",
         "panel": MORPH_LIP,
         "binds": ["Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
-        "ratios": [1, -0.5]
+        "ratios": [1, -0.3],
     },
-    "Fcl_MTH_Niyari_L": {
-        "name": "にこ左",
+    "Fcl_MTH_Niko": {
+        "name": "にこ",
         "panel": MORPH_LIP,
         "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
-        "ratios": [1, 1, -0.5]
+        "ratios": [0.5, 0.5, -0.3],
     },
-    "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
-    "Fcl_MTH_Sorrow": {"name": "▲", "panel": MORPH_LIP},
-    "Fcl_MTH_Surprised": {"name": "あ２", "panel": MORPH_LIP},
+    "Fcl_MTH_Joy": {"name": "ワ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Joy_Bone": {
+        "name": "ワボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+            "舌4",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-24, 0, 0),
+            MQuaternion.fromEulerAngles(-24, 0, 0),
+            MQuaternion.fromEulerAngles(16, 0, 0),
+            MQuaternion.fromEulerAngles(28, 0, 0),
+        ],
+    },
+    "Fcl_MTH_Joy_Group": {"name": "ワ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Joy", "Fcl_MTH_Joy_Bone"]},
+    "Fcl_MTH_Sorrow": {"name": "▲頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Sorrow_Bone": {
+        "name": "▲ボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-6, 0, 0),
+            MQuaternion.fromEulerAngles(-3, 0, 0),
+        ],
+    },
+    "Fcl_MTH_Sorrow_Group": {"name": "▲", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Sorrow", "Fcl_MTH_Sorrow_Bone"]},
+    "Fcl_MTH_Surprised": {"name": "わー頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Surprised_Bone": {
+        "name": "わーボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+            "舌4",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-24, 0, 0),
+            MQuaternion.fromEulerAngles(-24, 0, 0),
+            MQuaternion.fromEulerAngles(16, 0, 0),
+            MQuaternion.fromEulerAngles(28, 0, 0),
+        ],
+    },
+    "Fcl_MTH_Surprised_Group": {
+        "name": "わー",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Surprised", "Fcl_MTH_Surprised_Bone"],
+    },
+    "Fcl_MTH_tongueOut": {
+        "name": "べーボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(0, 0, -0.24),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-9, 0, 0),
+            MQuaternion.fromEulerAngles(-13.2, 0, 0),
+            MQuaternion.fromEulerAngles(-23.2, 0, 0),
+        ],
+    },
+    "Fcl_MTH_tongueOut_Group": {
+        "name": "べー",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_A", "Fcl_MTH_I", "Fcl_MTH_tongueOut"],
+        "ratios": [0.12, 0.56, 1],
+    },
+    "Fcl_MTH_tongueUp": {
+        "name": "ぺろりボーン",
+        "panel": MORPH_LIP,
+        "bone": [
+            "舌1",
+            "舌2",
+            "舌3",
+            "舌4",
+        ],
+        "move_ratios": [
+            MVector3D(),
+            MVector3D(-0.14, 0, -0.23),
+            MVector3D(),
+            MVector3D(),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-3.6, -28, -3.2),
+            MQuaternion.fromEulerAngles(44, 0, 0),
+            MQuaternion.fromEulerAngles(26, 0, 0),
+            MQuaternion.fromEulerAngles(12, 0, 0),
+        ],
+    },
+    "Fcl_MTH_tongueUp_Group": {
+        "name": "ぺろり",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_A", "Fcl_MTH_Fun", "Fcl_MTH_tongueUp"],
+        "ratios": [0.12, 0.54, 1],
+    },
     "jawOpen": {"name": "あああ", "panel": MORPH_LIP},
     "jawForward": {"name": "顎前", "panel": MORPH_LIP},
     "jawLeft": {"name": "顎左", "panel": MORPH_LIP},

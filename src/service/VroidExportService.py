@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 import logging
+from operator import index
 import traceback
 from PIL import Image, ImageChops
 import struct
@@ -14,6 +15,7 @@ import math
 import random
 import string
 import copy
+import itertools
 
 # import _pickle as cPickle
 
@@ -951,6 +953,43 @@ class VroidExportService:
         target_morphs = copy.deepcopy(model.org_morphs)
         model.org_morphs = {}
 
+        face_close_dict = {}
+        for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+            face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
+
+        face_material_index_vertices = []
+        face_left_close_index_vertices = []
+        face_right_close_index_vertices = []
+        for mat_name, mat_idxs in model.material_indices.items():
+            if "_Face_" in mat_name:
+                for index_idx in mat_idxs:
+                    face_material_index_vertices.append(
+                        [
+                            model.vertex_dict[model.indices[index_idx][0]].position.data(),
+                            model.vertex_dict[model.indices[index_idx][1]].position.data(),
+                            model.vertex_dict[model.indices[index_idx][2]].position.data(),
+                        ]
+                    )
+
+                    close_poses = [
+                        model.vertex_dict[model.indices[index_idx][0]].position.data()
+                        + face_close_dict.get(model.indices[index_idx][0], np.zeros(3)),
+                        model.vertex_dict[model.indices[index_idx][1]].position.data()
+                        + face_close_dict.get(model.indices[index_idx][1], np.zeros(3)),
+                        model.vertex_dict[model.indices[index_idx][2]].position.data()
+                        + face_close_dict.get(model.indices[index_idx][2], np.zeros(3)),
+                    ]
+
+                    if np.mean(close_poses, axis=0)[0] < 0:
+                        face_right_close_index_vertices.append(close_poses)
+                    else:
+                        face_left_close_index_vertices.append(close_poses)
+                break
+
+        face_material_index_vertices = np.array(face_material_index_vertices)
+        face_left_close_index_vertices = np.array(face_left_close_index_vertices)
+        face_right_close_index_vertices = np.array(face_right_close_index_vertices)
+
         # 定義済みグループモーフ
         for sidx, shape in enumerate(model.json_data["extensions"]["VRM"]["blendShapeMaster"]["blendShapeGroups"]):
             if len(shape["binds"]) == 0:
@@ -1085,24 +1124,6 @@ class VroidExportService:
                     left_target_poses = np.array(target_poses)[np.where(np.array(target_poses)[:, 0] > 0)]
                     right_target_poses = np.array(target_poses)[np.where(np.array(target_poses)[:, 0] < 0)]
 
-                    # 顔の頂点位置データ(瞳を閉じた時の状態を基準とする)
-                    face_poses = []
-                    face_indices = []
-                    for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
-                        if base_offset.vertex_index in face_material_vertices:
-                            vertex = model.vertex_dict[base_offset.vertex_index]
-                            face_poses.append((base_offset.position_offset + vertex.position).data())
-                            face_indices.append(base_offset.vertex_index)
-
-                    # 顔頂点を左右に分ける
-                    left_face_poses = np.array(face_poses)[np.where(np.array(face_poses)[:, 0] > 0)]
-                    right_face_poses = np.array(face_poses)[np.where(np.array(face_poses)[:, 0] < 0)]
-
-                    for vidx in face_material_vertices:
-                        if vidx not in face_indices:
-                            vertex = model.vertex_dict[vidx]
-                            face_poses.append(vertex.position.data())
-
                     if "brow_" in morph_name:
                         # 眉
                         # デフォルトの移動量（とりあえず適当に）
@@ -1137,32 +1158,42 @@ class VroidExportService:
                                 if "_Abobe" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, offset_distance, 0))
                                 if "_Left" in morph_name:
-                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(-offset_distance, 0, 0))
-                                if "_Right" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(offset_distance, 0, 0))
+                                if "_Right" in morph_name:
+                                    morph_offset = VertexMorphOffset(vertex.index, MVector3D(-offset_distance, 0, 0))
                                 if "_Front" in morph_name:
                                     morph_offset = VertexMorphOffset(vertex.index, MVector3D(0, 0, -offset_distance))
                                 if "_Front" not in morph_name:
-                                    # 移動後の顔材質とのXY距離を測る
-                                    face_distances = np.linalg.norm(
-                                        (
-                                            np.array(face_poses)[:, :2]
-                                            - (morph_offset.position_offset + vertex.position).data()[:2]
-                                        ),
+                                    # 眉前以外はZ方向に補正する
+                                    morphed_pos = (vertex.position + morph_offset.position_offset).data()
+
+                                    # 面ごとの頂点との距離
+                                    face_index_distances = np.linalg.norm(
+                                        (face_material_index_vertices[:, :, :2] - morphed_pos[:2]),
                                         ord=2,
-                                        axis=1,
+                                        axis=2,
                                     )
-                                    # 近い顔頂点の位置
-                                    near_face_poses = np.array(face_poses)[np.argsort(face_distances)[:4]]
-                                    # Z方向の補正(一番手前っぽいのに合わせる)
-                                    morph_offset.position_offset.setZ(
-                                        (
-                                            np.min(near_face_poses, axis=0)
-                                            - (morph_offset.position_offset + vertex.position).data()
-                                        )[2]
-                                        - 0.01
+                                    nearest_face_index_vertices = face_material_index_vertices[
+                                        np.argmin(np.sum(face_index_distances, axis=1))
+                                    ]
+
+                                    # 面垂線
+                                    v1 = nearest_face_index_vertices[1] - nearest_face_index_vertices[0]
+                                    v2 = nearest_face_index_vertices[2] - nearest_face_index_vertices[1]
+                                    surface_vector = MVector3D.crossProduct(MVector3D(v1), MVector3D(v2))
+                                    surface_normal = surface_vector.normalized()
+
+                                    morphed_nearest_pos = calc_intersect_point(
+                                        morphed_pos + np.array([0, 0, -1000]),
+                                        morphed_pos + np.array([0, 0, 1000]),
+                                        np.mean(nearest_face_index_vertices, axis=0),
+                                        surface_normal.data(),
                                     )
+
+                                    # Z方向の補正
+                                    morph_offset.position_offset.setZ(morphed_nearest_pos[2] - morphed_pos[2] - 0.02)
                                 target_offset.append(morph_offset)
+
                     elif "eye_Small" in morph_name:
                         # 瞳小
                         base_morph = (
@@ -1197,7 +1228,11 @@ class VroidExportService:
                                 )
                             else:
                                 # その他はそのまままばたきの変動
-                                target_offset.append(VertexMorphOffset(vertex.index, base_offset.position_offset))
+                                target_offset.append(
+                                    VertexMorphOffset(
+                                        vertex.index, base_offset.position_offset * MVector3D(1, 1.05, 1)
+                                    )
+                                )
 
                         for vidx in target_material_vertices:
                             vertex = model.vertex_dict[vidx]
@@ -1207,8 +1242,10 @@ class VroidExportService:
                             )
 
                             # 顔頂点を左右に分ける
-                            target_face_poses = (
-                                left_face_poses if np.sign(vertex.position.x()) > 0 else right_face_poses
+                            face_target_material_index_vertices = (
+                                face_left_close_index_vertices
+                                if np.sign(vertex.position.x()) > 0
+                                else face_right_close_index_vertices
                             )
                             # 白目材質を真円に広げる
                             vertex_target_poses = (
@@ -1245,22 +1282,35 @@ class VroidExportService:
                                     * np.sign(mean_target_pos[1] - vertex.position.y())
                                 )
 
-                            # 移動後の顔材質と、XY方向に広げた後の頂点とのXY距離を測る
-                            face_distances = np.linalg.norm(
-                                (
-                                    np.array(target_face_poses)[:, :2]
-                                    - (vertex.position + morph_offset.position_offset).data()[:2]
-                                ),
+                            morph_offset.position_offset += (vertex.position - MVector3D(mean_target_pos)) * MVector3D(0.1, 0.1, 0)
+
+                            morphed_pos = (vertex.position + morph_offset.position_offset).data()
+
+                            # 面ごとの頂点との距離
+                            face_index_distances = np.linalg.norm(
+                                (face_target_material_index_vertices[:, :, :2] - morphed_pos[:2]),
                                 ord=2,
-                                axis=1,
+                                axis=2,
                             )
-                            # 近い顔頂点の位置
-                            near_face_poses = np.array(target_face_poses)[np.argsort(face_distances)[:4]]
+                            nearest_face_index_vertices = face_target_material_index_vertices[
+                                np.argmin(np.sum(face_index_distances, axis=1))
+                            ]
+
+                            # 面垂線
+                            v1 = nearest_face_index_vertices[1] - nearest_face_index_vertices[0]
+                            v2 = nearest_face_index_vertices[2] - nearest_face_index_vertices[1]
+                            surface_vector = MVector3D.crossProduct(MVector3D(v1), MVector3D(v2))
+                            surface_normal = surface_vector.normalized()
+
+                            morphed_nearest_pos = calc_intersect_point(
+                                morphed_pos + np.array([0, 0, -1000]),
+                                morphed_pos + np.array([0, 0, 1000]),
+                                np.mean(nearest_face_index_vertices, axis=0),
+                                surface_normal.data(),
+                            )
 
                             # Z方向の補正
-                            morph_offset.position_offset.setZ(
-                                (np.mean(near_face_poses, axis=0) - (vertex.position).data())[2] - 0.02
-                            )
+                            morph_offset.position_offset.setZ(morphed_nearest_pos[2] - morphed_pos[2] - 0.02)
                             # 白目部分を前に出す
                             target_offset.append(morph_offset)
 
@@ -1406,7 +1456,9 @@ class VroidExportService:
 
         for morph_name, morph in vertex_morphs.items():
             # 定義外モーフがあれば一応取り込む（表示枠には追加しない）
-            if morph_name in MORPH_PAIRS.keys() and (morph_name in target_morphs or morph.name in target_morphs or morph.english_name in target_morphs):
+            if morph_name in MORPH_PAIRS.keys() and (
+                morph_name in target_morphs or morph.name in target_morphs or morph.english_name in target_morphs
+            ):
                 continue
             target_morph_indexes[morph.index] = len(model.org_morphs)
             morph.index = len(model.org_morphs)
@@ -1948,8 +2000,11 @@ class VroidExportService:
                 for material_name, material in materials_by_type[material_type].items():
                     model.materials[material_name] = material
                     model.material_vertices[material_name] = []
+                    model.material_indices[material_name] = []
                     for index_accessor, indices in indices_by_materials[material_name].items():
                         for v0_idx, v1_idx, v2_idx in zip(indices[:-2:3], indices[1:-1:3], indices[2::3]):
+                            model.material_indices[material_name].append(index_idx)
+
                             # 面の貼り方がPMXは逆
                             model.indices[index_idx] = [v2_idx, v1_idx, v0_idx]
                             index_idx += 1
@@ -2952,6 +3007,74 @@ def calc_ratio(ratio: float, oldmin: float, oldmax: float, newmin: float, newmax
 
 def randomname(n) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=n))
+
+
+# https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
+def calc_intersect_point(p0: np.ndarray, p1: np.ndarray, p_co: np.ndarray, p_no: np.ndarray, epsilon=1e-6):
+    """
+    p0, p1: Define the line.
+    p_co, p_no: define the plane:
+        p_co Is a point on the plane (plane coordinate).
+        p_no Is a normal vector defining the plane direction;
+             (does not need to be normalized).
+
+    Return a Vector or None (when the intersection can't be found).
+    """
+
+    u = p1 - p0
+    dot = p_no.dot(u)
+
+    if abs(dot) > epsilon:
+        # The factor of the point between p0 -> p1 (0 - 1)
+        # if 'fac' is between (0 - 1) the point intersects with the segment.
+        # Otherwise:
+        #  < 0.0: behind p0.
+        #  > 1.0: infront of p1.
+        w = p0 - p_co
+        fac = -p_no.dot(w) / dot
+        u = u * fac
+        return p0 + u
+
+    return None
+
+
+# https://stackoverflow.com/questions/18838403/get-the-closest-point-to-a-plane-defined-by-four-vertices-in-python
+def calc_nearest_point(p0: np.ndarray, p1: np.ndarray, p2: np.ndarray, p: np.ndarray):
+    u = p1 - p0
+    v = p2 - p0
+    # vector normal to plane
+    n = np.cross(u, v)
+    n /= np.linalg.norm(n)
+
+    p_ = p - p0
+    # dist_to_plane = np.dot(p_, n)
+    p_normal = np.dot(p_, n) * n
+    p_tangent = p_ - p_normal
+
+    closest_point = p_tangent + p0
+    # coords = np.linalg.lstsq(np.column_stack((u, v)), p_tangent)[0]
+
+    return closest_point
+
+
+# https://stackoverflow.com/questions/7997152/python-3d-polynomial-surface-fit-order-dependent
+def polyfit2d(x, y, z, order=3):
+    ncols = (order + 1) ** 2
+    G = np.zeros((x.size, ncols))
+    ij = itertools.product(range(order + 1), range(order + 1))
+    for k, (i, j) in enumerate(ij):
+        G[:, k] = x**i * y**j
+    m, _, _, _ = np.linalg.lstsq(G, z)
+    return m
+
+
+def polyval2d(x, y, m):
+    order = int(np.sqrt(len(m))) - 1
+    ij = itertools.product(range(order + 1), range(order + 1))
+    z = np.zeros_like(x)
+    for a, (i, j) in zip(m, ij):
+        z += a * x**i * y**j
+    return z
 
 
 DISABLE_BONES = [
@@ -4368,7 +4491,6 @@ MORPH_PAIRS = {
         "name": "はぅ",
         "panel": MORPH_EYE,
         "binds": ["eye_Hau_Material", "eye_Hide_Vertex"],
-        "ratios": [1, 1.2],
     },
     "eye_Hachume_Material": {
         "name": "はちゅ目材質",
@@ -4380,7 +4502,6 @@ MORPH_PAIRS = {
         "name": "はちゅ目",
         "panel": MORPH_EYE,
         "binds": ["eye_Hachume_Material", "eye_Hide_Vertex"],
-        "ratios": [1, 1.2],
     },
     "eye_Nagomi_Material": {
         "name": "なごみ材質",
@@ -4392,7 +4513,6 @@ MORPH_PAIRS = {
         "name": "なごみ",
         "panel": MORPH_EYE,
         "binds": ["eye_Nagomi_Material", "eye_Hide_Vertex"],
-        "ratios": [1, 1.2],
     },
     "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
     "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},
@@ -4449,6 +4569,24 @@ MORPH_PAIRS = {
     "Fcl_MTH_Fun_R": {"name": "にっこり右", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
     "Fcl_MTH_Fun_L": {"name": "にっこり左", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},
     "Fcl_MTH_Fun": {"name": "にっこり", "panel": MORPH_LIP},
+    "Fcl_MTH_Niyari_R": {
+        "name": "にこ右",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Large"],
+        "ratios": [1, -0.5]
+    },
+    "Fcl_MTH_Niyari_L": {
+        "name": "にこ左",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
+        "ratios": [1, -0.5]
+    },
+    "Fcl_MTH_Niyari_L": {
+        "name": "にこ左",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
+        "ratios": [1, 1, -0.5]
+    },
     "Fcl_MTH_Joy": {"name": "ワ", "panel": MORPH_LIP},
     "Fcl_MTH_Sorrow": {"name": "▲", "panel": MORPH_LIP},
     "Fcl_MTH_Surprised": {"name": "あ２", "panel": MORPH_LIP},

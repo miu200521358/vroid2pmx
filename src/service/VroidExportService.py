@@ -1469,7 +1469,15 @@ class VroidExportService:
                 for offset in morph.offsets:
                     old_idx = offset.morph_index
                     offset.morph_index = target_morph_indexes[old_idx]
-            if "材質" not in morph.name and "頂点" not in morph.name:
+            elif morph.morph_type == 1:
+                # 頂点モーフの場合、動いてないのは削除
+                movable_offsets = []
+                for offset in morph.offsets:
+                    if offset.position_offset != MVector3D():
+                        movable_offsets.append(offset)
+                morph.offsets = movable_offsets
+
+            if "材質" not in morph.name and "頂点" not in morph.name and "ボーン" not in morph.name:
                 model.display_slots["表情"].references.append((1, morph.index))
 
         for morph_name, morph in vertex_morphs.items():
@@ -4947,15 +4955,15 @@ MORPH_PAIRS = {
         ],
         "move_ratios": [
             MVector3D(),
-            MVector3D(-0.14, 0, -0.23),
+            MVector3D(0, -0.03, -0.18),
             MVector3D(),
             MVector3D(),
         ],
         "rotate_ratios": [
-            MQuaternion.fromEulerAngles(-3.6, -28, -3.2),
-            MQuaternion.fromEulerAngles(44, 0, 0),
-            MQuaternion.fromEulerAngles(26, 0, 0),
-            MQuaternion.fromEulerAngles(12, 0, 0),
+            MQuaternion.fromEulerAngles(0, -5, 0),
+            MQuaternion.fromEulerAngles(33, -16, -4),
+            MQuaternion.fromEulerAngles(15, 3.6, -1),
+            MQuaternion.fromEulerAngles(20, 0, 0),
         ],
     },
     "Fcl_MTH_tongueUp_Group": {

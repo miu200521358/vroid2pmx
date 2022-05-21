@@ -2230,6 +2230,8 @@ class VroidExportService:
                             add_material.english_name = f"{material_name}_{mat_suffix_english}"
                             add_material.texture_index = len(model.textures) - 1
                             add_material.alpha = 0
+                            add_material.flag -= 0x01  # 両面描画をOFF
+                            add_material.flag -= 0x10  # エッジOFF
                             model.materials[add_material.name] = add_material
                             model.material_vertices[add_material.name] = []
 
@@ -4585,12 +4587,163 @@ MORPH_PAIRS = {
     "browOuterUpRight": {"name": "はんっ右", "panel": MORPH_EYEBROW},
     "browOuterUpLeft": {"name": "はんっ左", "panel": MORPH_EYEBROW},
     "browOuter": {"name": "はんっ", "panel": MORPH_EYEBROW, "binds": ["browOuterUpRight", "browOuterUpLeft"]},
-    "Fcl_EYE_Close": {"name": "まばたき", "panel": MORPH_EYE},
-    "Fcl_EYE_Joy": {"name": "笑い", "panel": MORPH_EYE},
-    "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
-    "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
-    "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右", "panel": MORPH_EYE},
-    "Fcl_EYE_Close_L": {"name": "ウィンク２", "panel": MORPH_EYE},
+    "Fcl_EYE_Surprised_R": {"name": "びっくり右", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
+    "Fcl_EYE_Surprised_L": {"name": "びっくり左", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
+    "Fcl_EYE_Surprised": {"name": "びっくり", "panel": MORPH_EYE},
+    "eye_Small_R": {"name": "瞳小右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Small_L": {"name": "瞳小左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Small": {"name": "瞳小", "panel": MORPH_EYE, "binds": ["eye_Small_R", "eye_Small_L"]},
+    "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
+    "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["eye_Big_R", "eye_Big_L"]},
+    "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Close_R_Bone": {
+        "name": "ｳｨﾝｸ２右ボーン",
+        "panel": MORPH_EYE,
+        "bone": [
+            "右目光",
+        ],
+        "move_ratios": [
+            MVector3D(0, 0, -0.015),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-12, 0, 0),
+        ],
+    },
+    "Fcl_EYE_Close_R_Group": {
+        "name": "ｳｨﾝｸ２右",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_R",
+            "Fcl_EYE_Close_R",
+            "eye_Small_R",
+            "Fcl_EYE_Close_R_Bone",
+            "brow_Front_R",
+            "Fcl_BRW_Sorrow_R",
+        ],
+        "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2],
+    },
+    "Fcl_EYE_Close_L": {"name": "ウィンク２頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Close_L_Bone": {
+        "name": "ウィンク２ボーン",
+        "panel": MORPH_EYE,
+        "bone": [
+            "左目光",
+        ],
+        "move_ratios": [
+            MVector3D(0, 0, -0.015),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(-12, 0, 0),
+        ],
+    },
+    "Fcl_EYE_Close_L_Group": {
+        "name": "ウィンク２",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_L",
+            "Fcl_EYE_Close_L",
+            "eye_Small_L",
+            "Fcl_EYE_Close_L_Bone",
+            "brow_Front_L",
+            "Fcl_BRW_Sorrow_L",
+        ],
+        "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2],
+    },
+    "Fcl_EYE_Close_Group": {
+        "name": "まばたき",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_R",
+            "Fcl_EYE_Close_R",
+            "eye_Small_R",
+            "Fcl_EYE_Close_R_Bone",
+            "brow_Front_R",
+            "Fcl_BRW_Sorrow_R",
+            "brow_Below_L",
+            "Fcl_EYE_Close_L",
+            "eye_Small_L",
+            "Fcl_EYE_Close_L_Bone",
+            "brow_Front_L",
+            "Fcl_BRW_Sorrow_L",
+        ],
+        "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2, 0.2, 1, 0.3, 1, 0.1, 0.2],
+    },
+    "Fcl_EYE_Close": {"name": "まばたき2", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy_R": {"name": "ウィンク右頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy_R_Bone": {
+        "name": "ウィンク右ボーン",
+        "panel": MORPH_EYE,
+        "bone": [
+            "右目光",
+        ],
+        "move_ratios": [
+            MVector3D(0, 0, 0.025),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(8, 0, 0),
+        ],
+    },
+    "Fcl_EYE_Joy_R_Group": {
+        "name": "ウィンク右",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_R",
+            "Fcl_EYE_Joy_R",
+            "eye_Small_R",
+            "Fcl_EYE_Joy_R_Bone",
+            "brow_Front_R",
+            "Fcl_BRW_Fun_R",
+        ],
+        "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5],
+    },
+    "Fcl_EYE_Joy_L": {"name": "ウィンク頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy_L_Bone": {
+        "name": "ウィンクボーン",
+        "panel": MORPH_EYE,
+        "bone": [
+            "左目光",
+        ],
+        "move_ratios": [
+            MVector3D(0, 0, 0.025),
+        ],
+        "rotate_ratios": [
+            MQuaternion.fromEulerAngles(8, 0, 0),
+        ],
+    },
+    "Fcl_EYE_Joy_L_Group": {
+        "name": "ウィンク",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_L",
+            "Fcl_EYE_Joy_L",
+            "eye_Small_L",
+            "Fcl_EYE_Joy_L_Bone",
+            "brow_Front_L",
+            "Fcl_BRW_Fun_L",
+        ],
+        "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5],
+    },
+    "Fcl_EYE_Joy_Group": {
+        "name": "笑い",
+        "panel": MORPH_EYE,
+        "binds": [
+            "brow_Below_R",
+            "Fcl_EYE_Joy_R",
+            "eye_Small_R",
+            "Fcl_EYE_Joy_R_Bone",
+            "brow_Front_R",
+            "Fcl_BRW_Fun_R",
+            "brow_Below_L",
+            "Fcl_EYE_Joy_L",
+            "eye_Small_L",
+            "Fcl_EYE_Joy_L_Bone",
+            "brow_Front_L",
+            "Fcl_BRW_Fun_L",
+        ],
+        "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5, 0.5, 1, 0.3, 1, 0.1, 0.5],
+    },
+    "Fcl_EYE_Joy": {"name": "笑い2", "panel": MORPH_EYE},
     "Fcl_EYE_Fun_R": {"name": "目を細める右", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun_L": {"name": "目を細める左", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun": {"name": "目を細める", "panel": MORPH_EYE},
@@ -4612,15 +4765,6 @@ MORPH_PAIRS = {
     "Fcl_EYE_Spread_R": {"name": "上瞼↑右", "panel": MORPH_EYE, "split": "Fcl_EYE_Spread"},
     "Fcl_EYE_Spread_L": {"name": "上瞼↑左", "panel": MORPH_EYE, "split": "Fcl_EYE_Spread"},
     "Fcl_EYE_Spread": {"name": "上瞼↑", "panel": MORPH_EYE},
-    "Fcl_EYE_Surprised_R": {"name": "びっくり右", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
-    "Fcl_EYE_Surprised_L": {"name": "びっくり左", "panel": MORPH_EYE, "split": "Fcl_EYE_Surprised"},
-    "Fcl_EYE_Surprised": {"name": "びっくり", "panel": MORPH_EYE},
-    "eye_Small_R": {"name": "瞳小右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
-    "eye_Small_L": {"name": "瞳小左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
-    "eye_Small": {"name": "瞳小", "panel": MORPH_EYE, "binds": ["eye_Small_R", "eye_Small_L"]},
-    "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
-    "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
-    "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["eye_Big_R", "eye_Big_L"]},
     "eye_Nanu_R": {
         "name": "なぬ！右",
         "panel": MORPH_EYE,
@@ -4823,6 +4967,24 @@ MORPH_PAIRS = {
     "Fcl_MTH_Angry_R": {"name": "Λ右", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
     "Fcl_MTH_Angry_L": {"name": "Λ左", "panel": MORPH_LIP, "split": "Fcl_MTH_Angry"},
     "Fcl_MTH_Angry": {"name": "Λ", "panel": MORPH_LIP},
+    "Fcl_MTH_Sage_R": {
+        "name": "口角下げ右",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Angry_R", "Fcl_MTH_Large"],
+        "ratios": [1, 0.5],
+    },
+    "Fcl_MTH_Sage_L": {
+        "name": "口角下げ左",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Angry_L", "Fcl_MTH_Large"],
+        "ratios": [1, 0.5],
+    },
+    "Fcl_MTH_Sage": {
+        "name": "口角下げ",
+        "panel": MORPH_LIP,
+        "binds": ["Fcl_MTH_Angry", "Fcl_MTH_Large"],
+        "ratios": [1, 0.5],
+    },
     "Fcl_MTH_Small": {"name": "うー", "panel": MORPH_LIP},
     "Fcl_MTH_Large": {"name": "口横広げ", "panel": MORPH_LIP},
     "Fcl_MTH_Fun_R": {"name": "にっこり右", "panel": MORPH_LIP, "split": "Fcl_MTH_Fun"},

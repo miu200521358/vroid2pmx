@@ -51,12 +51,13 @@
 ■　配布動画
 ----------------------------------------------------------------
 
-■　【MMD】VRoidをPmxに変換できるツールを作ってみた【ツール配布】【Vroid2Pmx ver1.00】
+【MMD】VRoidをPmxに変換できるツールを作ってみた【ツール配布】【Vroid2Pmx ver1.00】
 https://www.nicovideo.jp/watch/sm39696318
+https://youtu.be/KQj7rYXCzbc
 
-■　【MMD】Vroid2Pmxにモーフを沢山追加してみた【ツール配布】【Vroid2Pmx ver2.00】
-
-
+【MMD】Vroid2Pmxにモーフを沢山追加してみた【ツール配布】【Vroid2Pmx ver2.00】
+https://www.nicovideo.jp/watch/sm40499240
+https://youtu.be/ia0s_F3Trcc
 
 ----------------------------------------------------------------
 ■　同梱ファイル
@@ -204,7 +205,7 @@ https://github.com/miu200521358/vroid2pmx
 ■　履歴
 ----------------------------------------------------------------
 
-ver2.00.00 (2022/05/13)
+ver2.00.00 (2022/05/21)
 　機能追加
 　　・VRoid Studio 1.7.0 対応
 　　・自動生成モーフ追加

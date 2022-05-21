@@ -2230,8 +2230,8 @@ class VroidExportService:
                             add_material.english_name = f"{material_name}_{mat_suffix_english}"
                             add_material.texture_index = len(model.textures) - 1
                             add_material.alpha = 0
-                            add_material.flag -= 0x01  # 両面描画をOFF
-                            add_material.flag -= 0x10  # エッジOFF
+                            if (add_material.flag & 0x10) != 0:
+                                add_material.flag -= 0x10  # エッジOFF
                             model.materials[add_material.name] = add_material
                             model.material_vertices[add_material.name] = []
 

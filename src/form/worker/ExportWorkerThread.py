@@ -41,7 +41,8 @@ class ExportWorkerThread(BaseWorkerThread):
                 self.options = MExportOptions(\
                     version_name=self.frame.version_name, \
                     logging_level=self.frame.logging_level, \
-                    pmx_model=self.frame.file_panel_ctrl.org_model_file_ctrl.data.copy(), \
+                    vrm_model=self.frame.file_panel_ctrl.org_model_file_ctrl.data.copy(), \
+                    physics_flg=None, \
                     output_path=self.frame.file_panel_ctrl.output_pmx_file_ctrl.file_ctrl.GetPath(), \
                     param_options={}, \
                     monitor=self.frame.file_panel_ctrl.console_ctrl, \

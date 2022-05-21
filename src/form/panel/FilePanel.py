@@ -33,6 +33,11 @@ class FilePanel(BasePanel):
         self.static_line01 = wx.StaticLine(self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.LI_HORIZONTAL)
         self.header_sizer.Add(self.static_line01, 0, wx.EXPAND | wx.ALL, 5)
 
+        # # 簡易物理設定FLG
+        # self.physics_flg_ctrl = wx.CheckBox(self, wx.ID_ANY, logger.transtext("物理(簡易)を入れる"), wx.DefaultPosition, wx.DefaultSize, 0)
+        # self.physics_flg_ctrl.SetToolTip(logger.transtext("チェックを入れると、物理(簡易)を設定します。\nVRoid Studio で設定された物理をそのまま再現は出来てません。\nPmxTailor で入れた物理に比べて固くなりがちです。"))
+        # self.physics_flg_ctrl.Bind(wx.EVT_CHECKBOX, self.set_output_vmd_path)
+
         # 対象Vrmファイルコントロール
         self.org_model_file_ctrl = HistoryFilePickerCtrl(self.frame, self, logger.transtext("対象モデル"), logger.transtext("対象モデルVrmファイルを開く"), ("vrm"), wx.FLP_DEFAULT_STYLE, \
                                                          logger.transtext("変換したいVrmファイルパスを指定してください\nVroid Studio 正式版(1.0.0)以降のみ対応しています。\nD&Dでの指定、開くボタンからの指定、履歴からの選択ができます。"), \

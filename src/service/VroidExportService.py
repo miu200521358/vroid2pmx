@@ -173,41 +173,38 @@ class VroidExportService:
 
         # 材質・ボーン・頂点INDEXの対応表を作成
         bone_materials = {}
-        for vidx, vertex in enumerate(model.vertex_dict.values()):
-            for bone_idx in vertex.deform.get_idx_list(weight=0.01):
-                bone_name = model.bone_indexes[bone_idx]
-                if bone_name not in model.vertices:
-                    model.vertices[bone_name] = []
+        for bone_idx, bone_vidxs in model.vertices.items():
+            bone_name = model.bone_indexes.get(bone_idx, None)
+            for material_name, vidxs in model.material_vertices.items():
+                if set(vidxs) & set(bone_vidxs):
+                    if bone_name not in bone_materials:
+                        bone_materials[bone_name] = []
+                    if material_name not in bone_materials[bone_name]:
+                        bone_materials[bone_name].append(material_name)
 
-                model.vertices[bone_name].append(vertex)
+            logger.info("-- -- PmxTailor用設定ファイル出力準備 (%s)", bone_name)
 
-                for material_name, vidxs in model.material_vertices.items():
-                    if vertex.index in vidxs:
-                        if bone_name not in bone_materials:
-                            bone_materials[bone_name] = []
-                        if material_name not in bone_materials[bone_name]:
-                            bone_materials[bone_name].append(material_name)
-
-            if vidx % 2000 == 0 and vidx > 0:
-                logger.info("-- -- PmxTailor用設定ファイル出力準備 (%s)", vidx)
+        HAIR_NAME = "髪"
+        CAT_EAR_NAME = "CatEar2"
+        RABBIT_EAR_NAME = "RabbitEar2"
 
         hair_bones = {}
         cat_ear_bones = {}
         rabbit_ear_bones = {}
         for bname in model.bones.keys():
-            if "髪" in bname:
+            if HAIR_NAME in bname:
                 if bname[:4] not in hair_bones:
                     hair_bones[bname[:4]] = []
                 hair_bones[bname[:4]].append(bname)
 
-            if "CatEar" in bname:
-                bkey = bname[bname.find("CatEar") - 3 : bname.find("CatEar") + len("CatEar")]
+            if CAT_EAR_NAME in bname:
+                bkey = bname[bname.find(CAT_EAR_NAME) - 3 : bname.find(CAT_EAR_NAME) + len(CAT_EAR_NAME)]
                 if bkey not in cat_ear_bones:
                     cat_ear_bones[bkey] = []
                 cat_ear_bones[bkey].append(bname)
 
-            if "RabbitEar" in bname:
-                bkey = bname[bname.find("RabbitEar") - 3 : bname.find("RabbitEar") + len("RabbitEar")]
+            if RABBIT_EAR_NAME in bname:
+                bkey = bname[bname.find(RABBIT_EAR_NAME) - 3 : bname.find(RABBIT_EAR_NAME) + len(RABBIT_EAR_NAME)]
                 if bkey not in rabbit_ear_bones:
                     rabbit_ear_bones[bkey] = []
                 rabbit_ear_bones[bkey].append(bname)
@@ -241,7 +238,7 @@ class VroidExportService:
                             rigidbody_groups[target_primitive_name] = "1"
                             target_bones[target_primitive_name] = []
                             target_bones[target_primitive_name].append([bone.name, f"{bone.name}先"])
-                        elif "髪" in bone.name:
+                        elif HAIR_NAME in bone.name:
                             target_names = ["HAIR"]
                             parent_bone_name = "頭"
 
@@ -272,21 +269,23 @@ class VroidExportService:
                             if logger.transtext("髪(ロング)") in target_bones:
                                 abb_names[logger.transtext("髪(ロング)")] = "髪L"
 
-                        elif "CatEar" in bone.name:
-                            target_names = ["CatEar"]
+                        elif CAT_EAR_NAME in bone.name:
+                            target_names = [CAT_EAR_NAME[:-1]]
                             parent_bone_name = "頭"
                             abb_names[logger.transtext("髪(ショート)")] = "左猫耳" if "_L_" in bone.name else "右猫耳"
                             rigidbody_groups[logger.transtext("髪(ショート)")] = "4"
                             target_bones[logger.transtext("髪(ショート)")] = [[]]
-                            for ebones in cat_ear_bones[("_L_CatEar" if "_L_" in bone.name else "_R_CatEar")]:
+                            for ebones in cat_ear_bones[("_L_CatEar2" if "_L_" in bone.name else "_R_CatEar2")]:
                                 target_bones[logger.transtext("髪(ショート)")][-1].append(ebones)
-                        elif "RabbitEar" in bone.name:
-                            target_names = ["RabbitEar"]
+                        elif RABBIT_EAR_NAME in bone.name:
+                            target_names = [RABBIT_EAR_NAME[:-1]]
                             parent_bone_name = "頭"
                             abb_names[logger.transtext("髪(ロング)")] = "左兎耳" if "_L_" in bone.name else "右兎耳"
                             rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
                             target_bones[logger.transtext("髪(ロング)")] = [[]]
-                            for ebones in rabbit_ear_bones[("_L_RabbitEar" if "_L_" in bone.name else "_R_RabbitEar")]:
+                            for ebones in rabbit_ear_bones[
+                                ("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")
+                            ]:
                                 target_bones[logger.transtext("髪(ロング)")][-1].append(ebones)
                         elif "LowerSleeve" in bone.name:
                             target_names = ["CLOTH"]
@@ -321,18 +320,26 @@ class VroidExportService:
                             # スカートは範囲全部
                             for nidx, vertical_name in enumerate(
                                 [
-                                    "L_SkirtSide",
-                                    "L_SkirtBack",
                                     "R_SkirtBack",
                                     "R_SkirtSide",
                                     "R_SkirtFront",
                                     "L_SkirtFront",
+                                    "L_SkirtSide",
+                                    "L_SkirtBack",
                                 ]
                             ):
                                 if nidx > 0 and len(target_bones[logger.transtext("布(コットン)")][-1]) > 0:
                                     target_bones[logger.transtext("布(コットン)")].append([])
                                 for bname in model.bones.keys():
-                                    if vertical_name in bname and "0" not in bname[bname.find(vertical_name) :]:
+                                    if (
+                                        (
+                                            bname in bone_materials
+                                            or model.bone_indexes.get(model.bones[bname].parent_index, None)
+                                            in bone_materials
+                                        )
+                                        and vertical_name in bname
+                                        and "0" not in bname[bname.find(vertical_name) :]
+                                    ):
                                         # スカートの0番目はウェイトを持ってないのでスルー
                                         target_bones[logger.transtext("布(コットン)")][-1].append(bname)
                         elif "Coat" in bone.name:
@@ -396,7 +403,7 @@ class VroidExportService:
 
                 logger.info("-- -- PmxTailor用設定ファイル出力 (%s)", bone.name)
 
-                if not re.search(r"HoodString|Sleeve|Bust|CatEar|RabbitEar", bone_bname):
+                if not re.search(r"HoodString|Sleeve|Bust|CatEar2|RabbitEar2", bone_bname):
                     # 袖・フードの紐は別々に設定が必要なのでbreakしない
                     break
 
@@ -1199,6 +1206,11 @@ class VroidExportService:
                                 target_offset.append(morph_offset)
 
                     elif "eye_Small" in morph_name:
+                        if not ("Fcl_EYE_Surprised_R" in target_morphs and "Fcl_EYE_Surprised_L" in target_morphs):
+                            logger.warning(
+                                "Fcl_EYE_Surprised モーフがなかったため、瞳小モーフ生成をスルーします", decoration=MLogger.DECORATION_BOX
+                            )
+                            continue
                         # 瞳小
                         base_morph = (
                             target_morphs["Fcl_EYE_Surprised_R"]
@@ -1210,6 +1222,11 @@ class VroidExportService:
                             if base_offset.vertex_index in target_material_vertices:
                                 target_offset.append(copy.deepcopy(base_offset))
                     elif "eye_Big" in morph_name:
+                        if not ("Fcl_EYE_Surprised_R" in target_morphs and "Fcl_EYE_Surprised_L" in target_morphs):
+                            logger.warning(
+                                "Fcl_EYE_Surprised モーフがなかったため、瞳大モーフ生成をスルーします", decoration=MLogger.DECORATION_BOX
+                            )
+                            continue
                         # 瞳大
                         base_morph = (
                             target_morphs["Fcl_EYE_Surprised_R"]
@@ -1223,6 +1240,11 @@ class VroidExportService:
                                     VertexMorphOffset(base_offset.vertex_index, base_offset.position_offset * -1)
                                 )
                     elif "eye_Hide_Vertex" in morph_name:
+                        if not ("Fcl_EYE_Close" in target_morphs):
+                            logger.warning(
+                                "Fcl_EYE_Close モーフがなかったため、目隠し頂点モーフ生成をスルーします", decoration=MLogger.DECORATION_BOX
+                            )
+                            continue
                         for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
                             vertex = model.vertex_dict[base_offset.vertex_index]
                             if base_offset.vertex_index in hide_material_vertices:

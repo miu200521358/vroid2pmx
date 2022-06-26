@@ -12,3 +12,6 @@ activate vmdsizing_np && cd src && python translate.py && cd .. && activate vmds
 
 rem clean‚È‚µ
 rem activate vmdsizing_np && cd src && python translate.py && cd .. && activate vmdsizing_cython && pyinstaller --clean vroid2pmx.spec
+
+activate vmdsizing_np && cd src && python lnk.py && cd ..
+

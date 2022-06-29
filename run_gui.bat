@@ -8,5 +8,8 @@ cd /d %~dp0
 
 cls
 
-activate vmdsizing_cython && src\setup.bat && python src\executor.py --out_log 1 --verbose 20 --is_saving 1
+set LANG=%~1
+if "%LANG%"=="" (set LANG=ja_JP)
+
+activate vmdsizing_cython && src\setup.bat && python src\executor.py --out_log 1 --verbose 20 --is_saving 1 --lang %LANG%
 

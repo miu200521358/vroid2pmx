@@ -172,7 +172,9 @@ class VroidExportService:
             return
 
         # 材質・ボーン・頂点INDEXの対応表を作成
+        logger.info("-- PmxTailor用設定ファイル出力準備1")
         bone_materials = {}
+        material_bones = {}
         for bone_idx, bone_vidxs in model.vertices.items():
             bone_name = model.bone_indexes.get(bone_idx, None)
             for material_name, vidxs in model.material_vertices.items():
@@ -182,7 +184,12 @@ class VroidExportService:
                     if material_name not in bone_materials[bone_name]:
                         bone_materials[bone_name].append(material_name)
 
-            logger.info("-- -- PmxTailor用設定ファイル出力準備 (%s)", bone_name)
+                    if material_name not in material_bones:
+                        material_bones[material_name] = []
+                    if bone_name not in material_bones[material_name]:
+                        material_bones[material_name].append(bone_name)
+
+            logger.info("-- -- PmxTailor用設定ファイル出力準備1 (%s)", bone_name)
 
         HAIR_NAME = "髪"
         CAT_EAR_NAME = "CatEar2"
@@ -191,11 +198,18 @@ class VroidExportService:
         hair_bones = {}
         cat_ear_bones = {}
         rabbit_ear_bones = {}
+        clothing_bones = {}
+
         for bname in model.bones.keys():
             if HAIR_NAME in bname:
                 if bname[:4] not in hair_bones:
                     hair_bones[bname[:4]] = []
                 hair_bones[bname[:4]].append(bname)
+
+            if "装飾_" in bname:
+                if bname[:9] not in clothing_bones:
+                    clothing_bones[bname[:9]] = []
+                clothing_bones[bname[:9]].append(bname)
 
             if CAT_EAR_NAME in bname:
                 bkey = bname[bname.find(CAT_EAR_NAME) - 3 : bname.find(CAT_EAR_NAME) + len(CAT_EAR_NAME)]
@@ -209,203 +223,240 @@ class VroidExportService:
                     rabbit_ear_bones[bkey] = []
                 rabbit_ear_bones[bkey].append(bname)
 
-        for bone_group in model.json_data["extensions"]["VRM"]["secondaryAnimation"]["boneGroups"]:
-            for bone_bidx in bone_group["bones"]:
-                bone_bname = model.json_data["nodes"][bone_bidx]["name"]
-                for bone in model.bones.values():
-                    if bone.english_name == bone_bname:
-                        # 材質ピックアップ
-                        weighted_material_names = bone_materials.get(bone.name, [])
-                        target_material_name = None
-                        parent_bone_name = None
-                        target_names = None
-                        abb_names = {}
-                        rigidbody_groups = {}
-                        target_bones = {}
-
-                        if "胸" in bone.name:
-                            target_names = ["CLOTH", "SKIN"]
-                            parent_bone_name = bone.name
-                            target_primitive_name = (
-                                logger.transtext("胸(小)")
-                                if bone.position.distanceToPoint(
-                                    model.bones[model.bone_indexes[bone.tail_index]].position
-                                )
-                                < 0.7
-                                else logger.transtext("胸(大)")
-                            )
-                            abb_names[target_primitive_name] = bone.name
-                            rigidbody_groups[target_primitive_name] = "1"
-                            target_bones[target_primitive_name] = []
-                            target_bones[target_primitive_name].append([bone.name, f"{bone.name}先"])
-                        elif HAIR_NAME in bone.name:
-                            target_names = ["HAIR"]
-                            parent_bone_name = "頭"
-
-                            for hbones in hair_bones.values():
-                                if (
-                                    len(hbones) > 1
-                                    and (model.bones[hbones[0]].position - model.bones[hbones[1]].position).y() < 0
-                                ):
-                                    if logger.transtext("髪(アホ毛)") not in target_bones:
-                                        target_bones[logger.transtext("髪(アホ毛)")] = []
-                                    target_bones[logger.transtext("髪(アホ毛)")].append(hbones)
-                                    rigidbody_groups[logger.transtext("髪(アホ毛)")] = "4"
-                                elif len(hbones) < 4:
-                                    if logger.transtext("髪(ショート)") not in target_bones:
-                                        target_bones[logger.transtext("髪(ショート)")] = []
-                                    target_bones[logger.transtext("髪(ショート)")].append(hbones)
-                                    rigidbody_groups[logger.transtext("髪(ショート)")] = "4"
-                                else:
-                                    if logger.transtext("髪(ロング)") not in target_bones:
-                                        target_bones[logger.transtext("髪(ロング)")] = []
-                                    target_bones[logger.transtext("髪(ロング)")].append(hbones)
-                                    rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
-
-                            if logger.transtext("髪(アホ毛)") in target_bones:
-                                abb_names[logger.transtext("髪(アホ毛)")] = "髪H"
-                            if logger.transtext("髪(ショート)") in target_bones:
-                                abb_names[logger.transtext("髪(ショート)")] = "髪S"
-                            if logger.transtext("髪(ロング)") in target_bones:
-                                abb_names[logger.transtext("髪(ロング)")] = "髪L"
-
-                        elif CAT_EAR_NAME in bone.name:
-                            target_names = [CAT_EAR_NAME[:-1]]
-                            parent_bone_name = "頭"
-                            abb_names[logger.transtext("髪(ショート)")] = "左猫耳" if "_L_" in bone.name else "右猫耳"
-                            rigidbody_groups[logger.transtext("髪(ショート)")] = "4"
-                            target_bones[logger.transtext("髪(ショート)")] = [[]]
-                            for ebones in cat_ear_bones[("_L_CatEar2" if "_L_" in bone.name else "_R_CatEar2")]:
-                                target_bones[logger.transtext("髪(ショート)")][-1].append(ebones)
-                        elif RABBIT_EAR_NAME in bone.name:
-                            target_names = [RABBIT_EAR_NAME[:-1]]
-                            parent_bone_name = "頭"
-                            abb_names[logger.transtext("髪(ロング)")] = "左兎耳" if "_L_" in bone.name else "右兎耳"
-                            rigidbody_groups[logger.transtext("髪(ロング)")] = "4"
-                            target_bones[logger.transtext("髪(ロング)")] = [[]]
-                            for ebones in rabbit_ear_bones[
-                                ("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")
-                            ]:
-                                target_bones[logger.transtext("髪(ロング)")][-1].append(ebones)
-                        elif "LowerSleeve" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
-                            abb_names[logger.transtext("単一揺れ物")] = "左袖" if "_L_" in bone.name else "右袖"
-                            rigidbody_groups[logger.transtext("単一揺れ物")] = "3"
-                            target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif "TipSleeve" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "左手首" if "_L_" in bone.name else "右手首"
-                            abb_names[logger.transtext("単一揺れ物")] = "左袖口" if "_L_" in bone.name else "右袖口"
-                            rigidbody_groups[logger.transtext("単一揺れ物")] = "3"
-                            target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif "C_Hood" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "首"
-                            abb_names[logger.transtext("単一揺れ物")] = "フード"
-                            rigidbody_groups[logger.transtext("単一揺れ物")] = "1"
-                            target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif "HoodString" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "上半身3"
-                            abb_names[logger.transtext("単一揺れ物")] = "左紐" if "_L_" in bone.name else "右紐"
-                            rigidbody_groups[logger.transtext("単一揺れ物")] = "4"
-                            target_bones[logger.transtext("単一揺れ物")] = [[bone.name, model.bone_indexes[bone.index + 1]]]
-                        elif "Skirt" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "下半身"
-                            abb_names[logger.transtext("布(コットン)")] = "Skrt"
-                            rigidbody_groups[logger.transtext("布(コットン)")] = "7"
-                            target_bones[logger.transtext("布(コットン)")] = [[]]
-                            # スカートは範囲全部
-                            for nidx, vertical_name in enumerate(
-                                [
-                                    "R_SkirtBack",
-                                    "R_SkirtSide",
-                                    "R_SkirtFront",
-                                    "L_SkirtFront",
-                                    "L_SkirtSide",
-                                    "L_SkirtBack",
-                                ]
-                            ):
-                                if nidx > 0 and len(target_bones[logger.transtext("布(コットン)")][-1]) > 0:
-                                    target_bones[logger.transtext("布(コットン)")].append([])
-                                for bname in model.bones.keys():
-                                    if (
-                                        (
-                                            bname in bone_materials
-                                            or model.bone_indexes.get(model.bones[bname].parent_index, None)
-                                            in bone_materials
-                                        )
-                                        and vertical_name in bname
-                                        and "0" not in bname[bname.find(vertical_name) :]
-                                    ):
-                                        # スカートの0番目はウェイトを持ってないのでスルー
-                                        target_bones[logger.transtext("布(コットン)")][-1].append(bname)
-                        elif "Coat" in bone.name:
-                            target_names = ["CLOTH"]
-                            parent_bone_name = "下半身"
-                            abb_names[logger.transtext("布(デニム)")] = "Coat"
-                            rigidbody_groups[logger.transtext("布(デニム)")] = "7"
-                            target_bones[logger.transtext("布(デニム)")] = [[]]
-                            # コートは範囲全部
-                            for nidx, vertical_name in enumerate(
-                                ["L_CoatSide", "L_CoatBack", "R_CoatBack", "R_CoatSide", "R_CoatFront", "L_CoatFront"]
-                            ):
-                                if nidx > 0 and len(target_bones[logger.transtext("布(デニム)")][-1]) > 0:
-                                    target_bones[logger.transtext("布(デニム)")].append([])
-                                for bname in model.bones.keys():
-                                    if vertical_name in bname:
-                                        target_bones[logger.transtext("布(デニム)")][-1].append(bname)
-
-                        if not target_names:
-                            logger.warning(
-                                "VRoid Studioで物理が設定ボーンの変換先が見つかりませんでした。 ボーン名: %s",
-                                bone.name,
-                                decoration=MLogger.DECORATION_BOX,
-                            )
-                            break
-
-                        for target_name in target_names:
-                            for material_name in weighted_material_names:
-                                if target_name in material_name:
-                                    target_material_name = material_name
-                                    break
-                            if target_material_name:
-                                break
-
-                        if target_material_name and target_bones.keys():
-                            for primitive_name, primitive_target_bones in target_bones.items():
-                                if primitive_target_bones[-1]:
-                                    abb_name = abb_names[primitive_name]
-                                    tailor_setting = {}
-                                    mname = model.materials[target_material_name].name
-                                    tailor_setting["material_name"] = mname
-                                    tailor_setting["parent_bone_name"] = parent_bone_name
-                                    tailor_setting["abb_name"] = abb_name
-                                    tailor_setting["group"] = rigidbody_groups[primitive_name]
-                                    tailor_setting["direction"] = "下"
-                                    tailor_setting["primitive"] = primitive_name
-                                    tailor_setting["exist_physics_clear"] = logger.transtext("再利用")
-                                    tailor_setting["target_bones"] = primitive_target_bones
-                                    tailor_setting["back_material_name"] = (
-                                        f"{mname}_エッジ" if f"{mname}_エッジ" in model.materials else ""
-                                    )
-
-                                    with open(
-                                        os.path.join(setting_dir_path, f"{abb_name}.json"), "w", encoding="utf-8"
-                                    ) as jf:
-                                        json.dump(
-                                            tailor_setting, jf, ensure_ascii=False, indent=4, separators=(",", ": ")
-                                        )
-
-                            break
-
-                logger.info("-- -- PmxTailor用設定ファイル出力 (%s)", bone.name)
-
-                if not re.search(r"HoodString|Sleeve|Bust|CatEar2|RabbitEar2", bone_bname):
-                    # 袖・フードの紐は別々に設定が必要なのでbreakしない
+        node_bone_names = {}
+        for nidx, node in enumerate(model.json_data["nodes"]):
+            for bone in model.bones.values():
+                if bone.english_name == node["name"]:
+                    node_bone_names[nidx] = bone.name
                     break
+
+        logger.info("-- PmxTailor用設定ファイル出力準備2")
+        pmx_tailor_settings = {}
+        for bone_group in model.json_data["extensions"]["VRM"]["secondaryAnimation"]["boneGroups"]:
+            if bone_group["comment"] in ("Bust", "CatEar", "RabbitEar", "Sleeve", "HoodString", "Hood"):
+                for bone_bidx in bone_group["bones"]:
+                    bone_name = node_bone_names[bone_bidx]
+                    bone = model.bones[bone_name]
+
+                    if "Bust" == bone_group["comment"]:
+                        target_names = ["CLOTH", "SKIN"]
+                        abb_name = bone.name
+                        parent_bone_name = "上半身3"
+                        group = "1"
+
+                        primitive_name = (
+                            logger.transtext("胸(小)")
+                            if bone.position.distanceToPoint(model.bones[model.bone_indexes[bone.tail_index]].position)
+                            < 0.7
+                            else logger.transtext("胸(大)")
+                        )
+
+                        target_bones = [[bone.name, f"{bone.name}先"]]
+                    elif "CatEar" == bone_group["comment"]:
+                        target_names = [CAT_EAR_NAME[:-1]]
+                        abb_name = "左猫耳" if "_L_" in bone.name else "右猫耳"
+                        parent_bone_name = "頭"
+                        group = "4"
+                        primitive_name = logger.transtext("髪(ショート)")
+                        target_bones = [cat_ear_bones[("_L_CatEar2" if "_L_" in bone.name else "_R_CatEar2")]]
+                    elif "RabbitEar" == bone_group["comment"]:
+                        target_names = [RABBIT_EAR_NAME[:-1]]
+                        abb_name = "左兎耳" if "_L_" in bone.name else "右兎耳"
+                        parent_bone_name = "頭"
+                        group = "4"
+                        primitive_name = logger.transtext("髪(ショート)")
+                        target_bones = [cat_ear_bones[("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")]]
+                    elif "Sleeve" == bone_group["comment"]:
+                        target_names = ["CLOTH"]
+                        if "LowerSleeve" in bone.name:
+                            abb_name = "左袖" if "_L_" in bone.name else "右袖"
+                            parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
+                        elif "TipSleeve" in bone.name:
+                            abb_name = "左袖口" if "_L_" in bone.name else "右袖口"
+                            parent_bone_name = "左手首" if "_L_" in bone.name else "左手首"
+                        primitive_name = logger.transtext("単一揺れ物")
+                        group = "3"
+                        target_bones = [[bone.name, model.bone_indexes[bone.index + 1]]]
+                    elif "HoodString" == bone_group["comment"]:
+                        target_names = ["CLOTH"]
+                        abb_name = "左紐" if "_L_" in bone.name else "右紐"
+                        parent_bone_name = "上半身3"
+                        group = "4"
+                        primitive_name = logger.transtext("単一揺れ物")
+                        target_bones = [
+                            [model.bone_indexes[bone.index - 1], bone.name, model.bone_indexes[bone.index + 1]]
+                        ]
+                    elif "Hood" == bone_group["comment"]:
+                        target_names = ["CLOTH"]
+                        abb_name = "フード"
+                        parent_bone_name = "首"
+                        group = "4"
+                        primitive_name = logger.transtext("単一揺れ物")
+                        target_bones = [[bone.name, model.bone_indexes[bone.index + 1]]]
+
+                    weighted_material_name = None
+                    for target_name in target_names:
+                        for material_name in bone_materials.get(bone.name, []):
+                            if target_name in material_name:
+                                weighted_material_name = model.materials[material_name].name
+                                break
+                        if weighted_material_name:
+                            break
+
+                    back_material_names = []
+                    if f"{weighted_material_name}_エッジ" in model.materials:
+                        back_material_names.append(f"{weighted_material_name}_エッジ")
+                    if f"{weighted_material_name}_裏" in model.materials:
+                        back_material_names.append(f"{weighted_material_name}_裏")
+
+                    pmx_tailor_settings[bone.name] = {
+                        "material_name": weighted_material_name,
+                        "abb_name": abb_name,
+                        "parent_bone_name": parent_bone_name,
+                        "group": group,
+                        "direction": logger.transtext("下"),
+                        "primitive": primitive_name,
+                        "exist_physics_clear": logger.transtext("再利用"),
+                        "target_bones": target_bones,
+                        "back_extend_material_names": back_material_names,
+                    }
+
+                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", bone.name)
+
+        HAIR_AHOGE = logger.transtext("髪(アホ毛)")
+        HAIR_SHORT = logger.transtext("髪(ショート)")
+        HAIR_LONG = logger.transtext("髪(ロング)")
+        ahoge_cnt = 1
+        short_cnt = 1
+        long_cnt = 1
+
+        for bname, hbones in hair_bones.items():
+            material_name = bone_materials.get(hbones[0], [""])[0]
+            material_name = model.materials[material_name].name if material_name else None
+            if len(hbones) > 1 and (model.bones[hbones[0]].position - model.bones[hbones[1]].position).y() < 0:
+                if (HAIR_AHOGE, material_name) not in pmx_tailor_settings:
+                    pmx_tailor_settings[(HAIR_AHOGE, material_name)] = {
+                        "material_name": material_name,
+                        "abb_name": f"髪H{ahoge_cnt}",
+                        "parent_bone_name": "頭",
+                        "group": "4",
+                        "direction": logger.transtext("下"),
+                        "primitive": HAIR_AHOGE,
+                        "exist_physics_clear": logger.transtext("再利用"),
+                        "target_bones": [hbones],
+                        "back_extend_material_names": [],
+                    }
+                    ahoge_cnt += 1
+                else:
+                    pmx_tailor_settings[(HAIR_AHOGE, material_name)]["target_bones"].append(hbones)
+            elif len(hbones) < 4:
+                if (HAIR_SHORT, material_name) not in pmx_tailor_settings:
+                    pmx_tailor_settings[(HAIR_SHORT, material_name)] = {
+                        "material_name": material_name,
+                        "abb_name": f"髪S{short_cnt}",
+                        "parent_bone_name": "頭",
+                        "group": "4",
+                        "direction": logger.transtext("下"),
+                        "primitive": HAIR_SHORT,
+                        "exist_physics_clear": logger.transtext("再利用"),
+                        "target_bones": [hbones],
+                        "back_extend_material_names": [],
+                    }
+                    short_cnt += 1
+                else:
+                    pmx_tailor_settings[(HAIR_SHORT, material_name)]["target_bones"].append(hbones)
+            else:
+                if (HAIR_LONG, material_name) not in pmx_tailor_settings:
+                    pmx_tailor_settings[(HAIR_LONG, material_name)] = {
+                        "material_name": material_name,
+                        "abb_name": f"髪L{long_cnt}",
+                        "parent_bone_name": "頭",
+                        "group": "4",
+                        "direction": logger.transtext("下"),
+                        "primitive": HAIR_LONG,
+                        "exist_physics_clear": logger.transtext("再利用"),
+                        "target_bones": [hbones],
+                        "back_extend_material_names": [],
+                    }
+                    long_cnt += 1
+                else:
+                    pmx_tailor_settings[(HAIR_LONG, material_name)]["target_bones"].append(hbones)
+
+        CLOTHING_COATSKIRT = logger.transtext("布(コットン)")
+        CLOTHING_SKIRT = logger.transtext("布(ベルベッド)")
+        CLOTHING_COAT = logger.transtext("布(デニム)")
+        clothing_cnt = {"_CoatSkirt": 1, "_Skirt": 1, "_Coat": 1}
+
+        for weighted_material_name, cbones in material_bones.items():
+            if "CLOTH" not in weighted_material_name or not cbones:
+                continue
+
+            logger.debug("weighted_material_name: %s", weighted_material_name)
+
+            for target_name, target_primitive, target_group, target_abb in (
+                ("_CoatSkirt", CLOTHING_COATSKIRT, 7, "CS"),
+                ("_Skirt", CLOTHING_SKIRT, 8, "SK"),
+                ("_Coat", CLOTHING_COAT, 9, "CT"),
+            ):
+                if [bname for bname in cbones if target_name in bname]:
+                    target_bones = []
+                    for nidx, vertical_name in enumerate(
+                        [
+                            f"R{target_name}Back",
+                            f"R{target_name}Side",
+                            f"R{target_name}Front",
+                            f"L{target_name}Front",
+                            f"L{target_name}Side",
+                            f"L{target_name}Back",
+                        ]
+                    ):
+                        is_reset = True
+                        for bname in cbones:
+                            if vertical_name in bname:
+                                if is_reset:
+                                    target_bones.append([])
+                                    is_reset = False
+                                target_bones[-1].append(bname)
+                        if target_bones and target_bones[-1]:
+                            # 末端ボーンを入れる
+                            target_bones[-1].append(model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1])
+
+                    material_name = model.materials[weighted_material_name].name
+                    back_material_names = []
+                    if f"{material_name}_エッジ" in model.materials:
+                        back_material_names.append(f"{material_name}_エッジ")
+                    if f"{material_name}_裏" in model.materials:
+                        back_material_names.append(f"{material_name}_裏")
+
+                    pmx_tailor_settings[
+                        (target_name, clothing_cnt[target_name], target_primitive, weighted_material_name)
+                    ] = {
+                        "material_name": material_name,
+                        "abb_name": f"{target_abb}{clothing_cnt[target_name]}",
+                        "parent_bone_name": "下半身",
+                        "group": str(target_group),
+                        "direction": logger.transtext("下"),
+                        "primitive": target_primitive,
+                        "exist_physics_clear": logger.transtext("再利用"),
+                        "target_bones": target_bones,
+                        "back_extend_material_names": back_material_names,
+                    }
+                    clothing_cnt[target_name] += 1
+
+        for setting_name, pmx_tailor_setting in pmx_tailor_settings.items():
+            if pmx_tailor_setting["material_name"] and pmx_tailor_setting["target_bones"]:
+                with open(
+                    os.path.join(setting_dir_path, f"{pmx_tailor_setting['abb_name']}.json"), "w", encoding="utf-8"
+                ) as jf:
+                    json.dump(pmx_tailor_setting, jf, ensure_ascii=False, indent=4, separators=(",", ": "))
+            else:
+                logger.warning(
+                    "VRoid Studioで設定された物理をPmxTailor用設定に変換できませんでした。 定義名: %s, 材質名: %s, ボーン名: %s",
+                    setting_name,
+                    pmx_tailor_setting["material_name"],
+                    pmx_tailor_setting["target_bones"],
+                    decoration=MLogger.DECORATION_BOX,
+                )
 
         logger.info("-- PmxTailor用設定ファイル出力終了")
 
@@ -575,10 +626,15 @@ class VroidExportService:
                         shape_size = MVector3D(
                             diff_size[1] * (0.2 + skin_offset), abs(axis_vec.x() * 0.7), diff_size[2]
                         )
+                    elif "上半身3" in bone.name:
+                        # 体幹の場合 / 半径：X, 高さ：Y
+                        shape_size = MVector3D(
+                            diff_size[2] * (0.3 + skin_offset), diff_size[1] * (0.3 + skin_offset), diff_size[2]
+                        )
                     elif "上半身" in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(
-                            diff_size[2] * (0.35 + skin_offset), diff_size[1] * (0.3 + skin_offset), diff_size[2]
+                            diff_size[2] * (0.4 + skin_offset), diff_size[1] * (0.35 + skin_offset), diff_size[2]
                         )
                     elif "下半身" in bone.name:
                         # 体幹の場合 / 半径：X, 高さ：Y

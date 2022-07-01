@@ -186,8 +186,8 @@ class VroidExportService:
 
                     if material_name not in material_bones:
                         material_bones[material_name] = []
-                    if bone_name not in material_bones[material_name]:
-                        material_bones[material_name].append(bone_name)
+                    if bone_idx not in material_bones[material_name]:
+                        material_bones[material_name].append(bone_idx)
 
             logger.info("-- -- PmxTailor用設定ファイル出力準備1 (%s)", bone_name)
 
@@ -319,9 +319,11 @@ class VroidExportService:
                         "exist_physics_clear": logger.transtext("再利用"),
                         "target_bones": target_bones,
                         "back_extend_material_names": back_material_names,
+                        "rigidbody_root_thick": (0.3 if "紐" in abb_name else 0.5),
+                        "rigidbody_end_thick": 0.5,
                     }
 
-                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", bone.name)
+                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", abb_name)
 
         HAIR_AHOGE = logger.transtext("髪(アホ毛)")
         HAIR_SHORT = logger.transtext("髪(ショート)")
@@ -345,6 +347,8 @@ class VroidExportService:
                         "exist_physics_clear": logger.transtext("再利用"),
                         "target_bones": [hbones],
                         "back_extend_material_names": [],
+                        "rigidbody_root_thick": 0.2,
+                        "rigidbody_end_thick": 0.4,
                     }
                     ahoge_cnt += 1
                 else:
@@ -361,6 +365,8 @@ class VroidExportService:
                         "exist_physics_clear": logger.transtext("再利用"),
                         "target_bones": [hbones],
                         "back_extend_material_names": [],
+                        "rigidbody_root_thick": 0.2,
+                        "rigidbody_end_thick": 0.4,
                     }
                     short_cnt += 1
                 else:
@@ -377,14 +383,18 @@ class VroidExportService:
                         "exist_physics_clear": logger.transtext("再利用"),
                         "target_bones": [hbones],
                         "back_extend_material_names": [],
+                        "rigidbody_root_thick": 0.2,
+                        "rigidbody_end_thick": 0.5,
                     }
                     long_cnt += 1
                 else:
                     pmx_tailor_settings[(HAIR_LONG, material_name)]["target_bones"].append(hbones)
 
-        CLOTHING_COATSKIRT = logger.transtext("布(コットン)")
-        CLOTHING_SKIRT = logger.transtext("布(ベルベッド)")
-        CLOTHING_COAT = logger.transtext("布(デニム)")
+        logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", ", ".join(list(pmx_tailor_settings.keys())[-1]))
+
+        CLOTHING_COATSKIRT = logger.transtext("単一揺れ物")
+        CLOTHING_SKIRT = logger.transtext("単一揺れ物")
+        CLOTHING_COAT = logger.transtext("単一揺れ物")
         clothing_cnt = {"_CoatSkirt": 1, "_Skirt": 1, "_Coat": 1}
 
         for weighted_material_name, cbones in material_bones.items():
@@ -398,28 +408,7 @@ class VroidExportService:
                 ("_Skirt", CLOTHING_SKIRT, 8, "SK"),
                 ("_Coat", CLOTHING_COAT, 9, "CT"),
             ):
-                if [bname for bname in cbones if target_name in bname]:
-                    target_bones = []
-                    for nidx, vertical_name in enumerate(
-                        [
-                            f"R{target_name}Back",
-                            f"R{target_name}Side",
-                            f"R{target_name}Front",
-                            f"L{target_name}Front",
-                            f"L{target_name}Side",
-                            f"L{target_name}Back",
-                        ]
-                    ):
-                        is_reset = True
-                        for bname in cbones:
-                            if vertical_name in bname:
-                                if is_reset:
-                                    target_bones.append([])
-                                    is_reset = False
-                                target_bones[-1].append(bname)
-                        if target_bones and target_bones[-1]:
-                            # 末端ボーンを入れる
-                            target_bones[-1].append(model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1])
+                if [bidx for bidx in cbones if target_name in model.bone_indexes[bidx]]:
 
                     material_name = model.materials[weighted_material_name].name
                     back_material_names = []
@@ -428,19 +417,70 @@ class VroidExportService:
                     if f"{material_name}_裏" in model.materials:
                         back_material_names.append(f"{material_name}_裏")
 
-                    pmx_tailor_settings[
-                        (target_name, clothing_cnt[target_name], target_primitive, weighted_material_name)
-                    ] = {
-                        "material_name": material_name,
-                        "abb_name": f"{target_abb}{clothing_cnt[target_name]}",
-                        "parent_bone_name": "下半身",
-                        "group": str(target_group),
-                        "direction": logger.transtext("下"),
-                        "primitive": target_primitive,
-                        "exist_physics_clear": logger.transtext("再利用"),
-                        "target_bones": target_bones,
-                        "back_extend_material_names": back_material_names,
-                    }
+                    for direction, parent_bone_name in (("L", "左足"), ("R", "右足")):
+                        target_bones = []
+
+                        for nidx, vertical_name in enumerate(
+                            [
+                                f"{direction}{target_name}Back",
+                                f"{direction}{target_name}Side",
+                                f"{direction}{target_name}Front",
+                            ]
+                        ):
+                            is_reset = True
+                            for bidx in sorted(cbones):
+                                bname = model.bone_indexes[bidx]
+                                if vertical_name in bname:
+                                    if is_reset:
+                                        target_bones.append([])
+                                        is_reset = False
+                                    target_bones[-1].append(bname)
+                            if (
+                                target_bones
+                                and target_bones[-1]
+                                and "_end_" in model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1]
+                            ):
+                                # 末端ボーンを入れる
+                                target_bones[-1].append(
+                                    model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1]
+                                )
+
+                        if target_name == "_Coat" and not target_bones:
+                            # CoatはCoatSkirtと被るので、うまく取れなければスルー
+                            continue
+
+                        # target_bone_cnts = [len(lbones) for lbones in target_bones]
+                        # # 段差がある場合、揃えておく（VRoid Studioのスカートはサイドだけ長いとかがある）
+                        # for n, bone_cnt in enumerate(target_bone_cnts):
+                        #     for _ in range(bone_cnt, np.max(target_bone_cnts)):
+                        #         target_bones[n].insert(0, "")
+
+                        pmx_tailor_settings[
+                            (
+                                target_name,
+                                direction,
+                                clothing_cnt[target_name],
+                                target_primitive,
+                                weighted_material_name,
+                            )
+                        ] = {
+                            "material_name": material_name,
+                            "abb_name": f"{target_abb}{direction}{clothing_cnt[target_name]}",
+                            "parent_bone_name": parent_bone_name,
+                            "group": str(target_group),
+                            "direction": logger.transtext("下"),
+                            "primitive": target_primitive,
+                            "exist_physics_clear": logger.transtext("再利用"),
+                            "target_bones": target_bones,
+                            "back_extend_material_names": back_material_names,
+                            "rigidbody_root_thick": 0.35,
+                            "rigidbody_end_thick": 0.5,
+                        }
+
+                        logger.info(
+                            "-- -- PmxTailor用設定ファイル出力準備2 (%s)", ", ".join((target_name, direction, material_name))
+                        )
+
                     clothing_cnt[target_name] += 1
 
         for setting_name, pmx_tailor_setting in pmx_tailor_settings.items():
@@ -565,11 +605,11 @@ class VroidExportService:
                 # 球体
                 if "頭" == bone.name:
                     # 頭はエルフ耳がある場合があるので、両目の間隔を使う
-                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 3
+                    eye_length = model.bones["右目"].position.distanceToPoint(model.bones["左目"].position) * 2.5
                     center_vertex[0] = bone.position.x()
                     # 頭はちょっと前と下にずらす
                     center_vertex[1] = min_vertex[1] + (max_vertex[1] - min_vertex[1]) / 2 - (eye_length * 0.15)
-                    center_vertex[2] = bone.position.z() - (eye_length * 0.3)
+                    center_vertex[2] = bone.position.z() - (eye_length * 0.1)
                     shape_size = MVector3D(eye_length, eye_length, eye_length)
                 elif "胸" in bone.name:
                     # 胸は奥行き
@@ -657,7 +697,7 @@ class VroidExportService:
                     else:
                         # 足の場合 / 半径：X, 高さ：Y
                         shape_size = MVector3D(
-                            diff_size[0] * (0.5 + skin_offset), abs(axis_vec.y() * 0.8), diff_size[2]
+                            diff_size[0] * (0.4 + skin_offset), abs(axis_vec.y() * 0.8), diff_size[2]
                         )
 
                     # 剛体の位置は基本的にはボーンの間
@@ -742,7 +782,7 @@ class VroidExportService:
                     # 最大
                     max_vertex = np.max(vertex_ary, axis=0)
 
-                    diff_mean = np.mean(np.abs(max_vertex - min_vertex)) * 0.25
+                    diff_mean = np.mean(np.abs(max_vertex - min_vertex)) * 0.2
                     shape_size = MVector3D(diff_mean, diff_mean, diff_mean)
                     center_vertex = MVector3D(
                         np.average([leg_bone.position.x(), bone.position.x()], weights=[0.7, 0.3]),
@@ -2198,7 +2238,7 @@ class VroidExportService:
                             for vidx in indices:
                                 v = model.vertex_dict[vidx]
                                 # テクスチャのuvの位置を取得
-                                uv_idx = (tex_ary.shape[:2] * v.uv.data()).astype(np.int)
+                                uv_idx = (tex_ary.shape[:2] * np.array([v.uv.y(), v.uv.x()])).astype(np.int)
                                 if (
                                     uv_idx[0] < tex_ary.shape[0]
                                     and uv_idx[1] < tex_ary.shape[1]
@@ -3379,7 +3419,7 @@ BONE_PAIRS = {
         "rigidbodyGroup": 0,
         "rigidbodyShape": 2,
         "rigidbodyMode": 0,
-        "rigidbodyNoColl": [0, 1, 2, 3],
+        "rigidbodyNoColl": [0, 1, 2],
     },
     "J_Bip_C_Head": {
         "name": "頭",
@@ -3387,10 +3427,10 @@ BONE_PAIRS = {
         "tail": None,
         "display": "体幹",
         "flag": 0x0002 | 0x0008 | 0x0010,
-        "rigidbodyGroup": 3,
+        "rigidbodyGroup": 0,
         "rigidbodyShape": 0,
         "rigidbodyMode": 0,
-        "rigidbodyNoColl": [0, 1, 2, 3],
+        "rigidbodyNoColl": [0, 1, 2],
     },
     "J_Adj_FaceEye": {
         "name": "両目",

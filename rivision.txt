@@ -228,6 +228,15 @@ Vroid2Pmx_2.00.01_β02 (2022/07/02) miumiu
 ・VRoid Studio衣装（CoatSkirt、Skirt、Coat）の物理プリセットを布系から単一揺れ物に変更
 　※物理なしの状態で足が出るような状態の場合、PmxTailor用設定ファイルで物理を設定しても足が突き抜けます
 
+https://fire.st/acptfM7
+Vroid2Pmx_2.00.01_β03 (2022/07/02) miumiu
+・うさ耳の材質判定が間違っていたのを修正
+
+https://fire.st/uLbfGFS
+Vroid2Pmx_2.00.01_β04 (2022/07/02) miumiu
+・PmxTailor用設定ファイルで複数段の一部にのみボーンウェイトが乗っていた場合に設定ファイルにボーン設定が足りなかったので追加
+
+
 
 
 
@@ -250,8 +259,7 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-
-https://fire.st/GXOlHiG
+https://fire.st/uLbfGFS
 <br>
 <br>
 ・エッジ材質が作られない場合がある不具合を修正<br>

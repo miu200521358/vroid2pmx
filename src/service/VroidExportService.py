@@ -178,7 +178,12 @@ class VroidExportService:
         for bone_idx, bone_vidxs in model.vertices.items():
             bone_name = model.bone_indexes.get(bone_idx, None)
             for material_name, vidxs in model.material_vertices.items():
-                if set(vidxs) & set(bone_vidxs):
+                # 一定以上ウェイトが乗っている場合のみ対象とする
+                if [
+                    vidx
+                    for vidx in list(set(vidxs) & set(bone_vidxs))
+                    if bone_idx in model.vertex_dict[vidx].deform.get_idx_list(0.3)
+                ]:
                     if bone_name not in bone_materials:
                         bone_materials[bone_name] = []
                     if material_name not in bone_materials[bone_name]:
@@ -265,7 +270,7 @@ class VroidExportService:
                         parent_bone_name = "頭"
                         group = "4"
                         primitive_name = logger.transtext("髪(ショート)")
-                        target_bones = [cat_ear_bones[("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")]]
+                        target_bones = [rabbit_ear_bones[("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")]]
                     elif "Sleeve" == bone_group["comment"]:
                         target_names = ["CLOTH"]
                         if "LowerSleeve" in bone.name:
@@ -408,7 +413,11 @@ class VroidExportService:
                 ("_Skirt", CLOTHING_SKIRT, 8, "SK"),
                 ("_Coat", CLOTHING_COAT, 9, "CT"),
             ):
-                if [bidx for bidx in cbones if target_name in model.bone_indexes[bidx]]:
+                if [
+                    bidx
+                    for bidx in cbones
+                    if target_name in model.bone_indexes[bidx] and model.bone_indexes[bidx] in bone_materials
+                ]:
 
                     material_name = model.materials[weighted_material_name].name
                     back_material_names = []
@@ -435,15 +444,13 @@ class VroidExportService:
                                         target_bones.append([])
                                         is_reset = False
                                     target_bones[-1].append(bname)
-                            if (
-                                target_bones
-                                and target_bones[-1]
-                                and "_end_" in model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1]
-                            ):
-                                # 末端ボーンを入れる
-                                target_bones[-1].append(
-                                    model.bone_indexes[model.bones[target_bones[-1][-1]].index + 1]
-                                )
+                            
+                            if target_bones and target_bones[-1]:
+                                while model.bones[target_bones[-1][-1]].tail_index >= 0:
+                                    # 末端ボーンまでを入れる
+                                    target_bones[-1].append(
+                                        model.bone_indexes[model.bones[target_bones[-1][-1]].tail_index]
+                                    )
 
                         if target_name == "_Coat" and not target_bones:
                             # CoatはCoatSkirtと被るので、うまく取れなければスルー

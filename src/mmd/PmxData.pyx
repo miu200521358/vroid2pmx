@@ -28,6 +28,9 @@ cdef class Deform:
     def get_weights(self):
         return []
 
+    def get_weight(self, bone_idx):
+        return 0
+
 class Bdef1(Deform):
     def __init__(self, index0):
         self.index0 = index0
@@ -37,6 +40,9 @@ class Bdef1(Deform):
     
     def get_weights(self):
         return [1]
+
+    def get_weight(self, bone_idx):
+        return (1 if self.index0 == bone_idx else 0)
         
     def __str__(self):
         return "<Bdef1 {0}>".format(self.index0)
@@ -61,6 +67,9 @@ class Bdef2(Deform):
     def get_weights(self):
         return [self.weight0, 1 - self.weight0]
         
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Bdef2 {0}, {1}, {2}>".format(self.index0, self.index1, self.weight0)
 
@@ -84,6 +93,9 @@ class Bdef4(Deform):
     
     def get_weights(self):
         return [self.weight0, self.weight1, self.weight2, self.weight3]
+        
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else self.weight1 if self.index1 == bone_idx else self.weight2 if self.index2 == bone_idx else self.weight3 if self.index3 == bone_idx else 0)
 
     def __str__(self):
         return "<Bdef4 {0}:{1}, {2}:{3}, {4}:{5}, {6}:{7}>".format(self.index0, self.index1, self.index2, self.index3, self.weight0, self.weight1, self.weight2, self.weight3)
@@ -106,6 +118,9 @@ class Sdef(Deform):
     def get_weights(self):
         return [self.weight0, 1 - self.weight0]
         
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Sdef {0}, {1}, {2}, {3} {4} {5}>".format(self.index0, self.index1, self.weight0, self.sdef_c, self.sdef_r0, self.sdef_r1)
 
@@ -127,6 +142,9 @@ class Qdef(Deform):
     def get_weights(self):
         return [self.weight0, 1 - self.weight0]
         
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Sdef {0}, {1}, {2}, {3} {4} {5}>".format(self.index0, self.index1, self.weight0, self.sdef_c, self.sdef_r0, self.sdef_r1)
 

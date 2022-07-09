@@ -236,7 +236,13 @@ https://fire.st/uLbfGFS
 Vroid2Pmx_2.00.01_β04 (2022/07/02) miumiu
 ・PmxTailor用設定ファイルで複数段の一部にのみボーンウェイトが乗っていた場合に設定ファイルにボーン設定が足りなかったので追加
 
+https://fire.st/tQ8LL9K
+Vroid2Pmx_2.00.01_β05 (2022/07/07) miumiu
+・髪の物理設定がない場合にログ出力に失敗していたのを修正
 
+https://fire.st/uX5YSFE
+Vroid2Pmx_2.00.01_β06 (2022/07/08) miumiu
+・PmxTailor用設定のログ出力エラーハンドリング追加
 
 
 
@@ -259,12 +265,9 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-https://fire.st/uLbfGFS
+https://fire.st/uX5YSFE
 <br>
 <br>
-・エッジ材質が作られない場合がある不具合を修正<br>
-・髪など同一種類で複数材質を持つ場合にそれぞれ別々に物理を設定できるようPmxTailor用設定ファイル出力処理修正<br>
-・VRoid Studio衣装の物理プリセットを布系から単一揺れ物に変更<br>
-　※物理なしの状態で足が出るような状態の場合、PmxTailor用設定ファイルで物理を設定しても足が突き抜けます<br>
+・PmxTailor用設定のログ出力エラーハンドリング追加<br>
 <br>
 ぜひ使っていただいて、感想・不具合報告等お願いいたします。<br>

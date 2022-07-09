@@ -407,5 +407,7 @@
     "-- PmxTailor用設定ファイル出力準備1": "--Preparation for output of configuration file for PmxTailor 1",
     "-- -- PmxTailor用設定ファイル出力準備1 (%s)": "---- Preparation for output of configuration file for PmxTailor 1 ( %s)",
     "-- PmxTailor用設定ファイル出力準備2": "--Preparation for output of configuration file for PmxTailor 2",
-    "-- -- PmxTailor用設定ファイル出力準備2 (%s)": "---- Preparation for output of configuration file for PmxTailor 2 ( %s)"
+    "-- -- PmxTailor用設定ファイル出力準備2 (%s)": "---- Preparation for output of configuration file for PmxTailor 2 ( %s)",
+    "-- 身体剛体準備終了": "",
+    "-- -- 身体剛体[%s]": ""
 }

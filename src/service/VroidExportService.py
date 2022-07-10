@@ -220,13 +220,15 @@ class VroidExportService:
                 bkey = bname[bname.find(CAT_EAR_NAME) - 3 : bname.find(CAT_EAR_NAME) + len(CAT_EAR_NAME)]
                 if bkey not in cat_ear_bones:
                     cat_ear_bones[bkey] = []
-                cat_ear_bones[bkey].append(bname)
+                if 2 > len(cat_ear_bones[bkey]):
+                    cat_ear_bones[bkey].append(bname)
 
             if RABBIT_EAR_NAME in bname:
                 bkey = bname[bname.find(RABBIT_EAR_NAME) - 3 : bname.find(RABBIT_EAR_NAME) + len(RABBIT_EAR_NAME)]
                 if bkey not in rabbit_ear_bones:
                     rabbit_ear_bones[bkey] = []
-                rabbit_ear_bones[bkey].append(bname)
+                if 2 > rabbit_ear_bones[bkey]:
+                    rabbit_ear_bones[bkey].append(bname)
 
         node_bone_names = {}
         for nidx, node in enumerate(model.json_data["nodes"]):
@@ -236,6 +238,8 @@ class VroidExportService:
                     break
 
         logger.info("-- PmxTailor用設定ファイル出力準備2")
+
+        bone_cnt = {"Bust": 1, "CatEar": 1, "RabbitEar": 1, "Sleeve": 1, "HoodString": 1, "Hood": 1}
         pmx_tailor_settings = {}
         for bone_group in model.json_data["extensions"]["VRM"]["secondaryAnimation"]["boneGroups"]:
             if bone_group["comment"] in ("Bust", "CatEar", "RabbitEar", "Sleeve", "HoodString", "Hood"):
@@ -259,45 +263,50 @@ class VroidExportService:
                         target_bones = [[bone.name, f"{bone.name}先"]]
                     elif "CatEar" == bone_group["comment"]:
                         target_names = [CAT_EAR_NAME[:-1]]
-                        abb_name = "左猫耳" if "_L_" in bone.name else "右猫耳"
+                        abb_name = f"左猫耳" if "_L_" in bone.name else f"右猫耳"
                         parent_bone_name = "頭"
-                        group = "4"
+                        group = "1"
                         primitive_name = logger.transtext("髪(ショート)")
                         target_bones = [cat_ear_bones[("_L_CatEar2" if "_L_" in bone.name else "_R_CatEar2")]]
                     elif "RabbitEar" == bone_group["comment"]:
                         target_names = [RABBIT_EAR_NAME[:-1]]
-                        abb_name = "左兎耳" if "_L_" in bone.name else "右兎耳"
+                        abb_name = f"左兎耳" if "_L_" in bone.name else f"右兎耳"
                         parent_bone_name = "頭"
-                        group = "4"
+                        group = "1"
                         primitive_name = logger.transtext("髪(ショート)")
                         target_bones = [rabbit_ear_bones[("_L_RabbitEar2" if "_L_" in bone.name else "_R_RabbitEar2")]]
                     elif "Sleeve" == bone_group["comment"]:
                         target_names = ["CLOTH"]
                         if "LowerSleeve" in bone.name:
-                            abb_name = "左袖" if "_L_" in bone.name else "右袖"
+                            abb_name = f"左袖{bone_cnt['Sleeve']}" if "_L_" in bone.name else f"右袖{bone_cnt['Sleeve']}"
                             parent_bone_name = "左ひじ" if "_L_" in bone.name else "右ひじ"
                         elif "TipSleeve" in bone.name:
-                            abb_name = "左袖口" if "_L_" in bone.name else "右袖口"
+                            abb_name = f"左袖口{bone_cnt['Sleeve']}" if "_L_" in bone.name else f"右袖口{bone_cnt['Sleeve']}"
                             parent_bone_name = "左手首" if "_L_" in bone.name else "左手首"
+                        bone_cnt["Sleeve"] += 1
                         primitive_name = logger.transtext("単一揺れ物")
                         group = "3"
-                        target_bones = [[bone.name, model.bone_indexes[bone.index + 1]]]
+                        target_bones = [[bone.name, model.bone_indexes[bone.tail_index]]]
                     elif "HoodString" == bone_group["comment"]:
                         target_names = ["CLOTH"]
-                        abb_name = "左紐" if "_L_" in bone.name else "右紐"
+                        abb_name = (
+                            f"左紐{bone_cnt['HoodString']}" if "_L_" in bone.name else f"右紐{bone_cnt['HoodString']}"
+                        )
+                        bone_cnt["HoodString"] += 1
                         parent_bone_name = "上半身3"
                         group = "4"
                         primitive_name = logger.transtext("単一揺れ物")
                         target_bones = [
-                            [model.bone_indexes[bone.index - 1], bone.name, model.bone_indexes[bone.index + 1]]
+                            [model.bone_indexes[bone.parent_index], bone.name, model.bone_indexes[bone.tail_index]]
                         ]
                     elif "Hood" == bone_group["comment"]:
                         target_names = ["CLOTH"]
-                        abb_name = "フード"
+                        abb_name = f"フード{bone_cnt['Hood']}"
+                        bone_cnt["Hood"] += 1
                         parent_bone_name = "首"
                         group = "4"
                         primitive_name = logger.transtext("単一揺れ物")
-                        target_bones = [[bone.name, model.bone_indexes[bone.index + 1]]]
+                        target_bones = [[bone.name, model.bone_indexes[bone.tail_index]]]
 
                     weighted_material_name = None
                     for target_name in target_names:
@@ -370,8 +379,8 @@ class VroidExportService:
                         "exist_physics_clear": logger.transtext("再利用"),
                         "target_bones": [hbones],
                         "back_extend_material_names": [],
-                        "rigidbody_root_thick": 0.2,
-                        "rigidbody_end_thick": 0.4,
+                        "rigidbody_root_thick": 0.3,
+                        "rigidbody_end_thick": 1.2,
                     }
                     short_cnt += 1
                 else:
@@ -395,10 +404,7 @@ class VroidExportService:
                 else:
                     pmx_tailor_settings[(HAIR_LONG, material_name)]["target_bones"].append(hbones)
 
-        try:
-            logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", ", ".join(list(pmx_tailor_settings.keys())[-1]))
-        finally:
-            pass
+        logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", list(pmx_tailor_settings.keys()))
 
         CLOTHING_COATSKIRT = logger.transtext("単一揺れ物")
         CLOTHING_SKIRT = logger.transtext("単一揺れ物")
@@ -505,7 +511,6 @@ class VroidExportService:
                     setting_name,
                     pmx_tailor_setting["material_name"],
                     pmx_tailor_setting["target_bones"],
-                    decoration=MLogger.DECORATION_BOX,
                 )
 
         logger.info("-- PmxTailor用設定ファイル出力終了")
@@ -516,10 +521,7 @@ class VroidExportService:
         for material_name, vidxs in model.material_vertices.items():
             if "SKIN" in model.materials[material_name].english_name:
                 skin_vidxs.extend(vidxs)
-            elif (
-                "CLOTH" in model.materials[material_name].english_name
-                or "CLOTH" in model.materials[material_name].english_name
-            ):
+            elif "CLOTH" in model.materials[material_name].english_name:
                 cloth_vidxs.extend(vidxs)
 
         bone_vertices = {}
@@ -532,23 +534,24 @@ class VroidExportService:
                 vidx for vidx in vidxs if bone.index in model.vertex_dict[vidx].deform.get_idx_list(0.4)
             ]
             target_bone_vidxs = list(set(skin_vidxs) & set(bone_strong_vidxs))
-            if 8 > len(target_bone_vidxs):
-                # 強参照肌頂点が少ない場合、弱参照頂点を確認する
+
+            if 20 > len(target_bone_vidxs):
+                # 強参照頂点が少ない場合、弱参照頂点を確認する
                 bone_weak_vidxs = [
                     vidx for vidx in vidxs if bone.index in model.vertex_dict[vidx].deform.get_idx_list(0.2)
                 ]
                 target_bone_vidxs = list(set(skin_vidxs) & set(bone_weak_vidxs))
 
-            if 8 > len(target_bone_vidxs) or "足先EX" in bone.name:
+            if 20 > len(target_bone_vidxs) or "足先EX" in bone.name:
                 # 弱参照肌頂点が少ない場合、衣装強参照頂点を確認する
                 # 足先は靴が必ず入るので衣装も含む
                 target_bone_vidxs = list((set(skin_vidxs) | set(cloth_vidxs)) & set(bone_strong_vidxs))
 
-            if 8 > len(target_bone_vidxs):
+            if 20 > len(target_bone_vidxs):
                 # 衣装強参照頂点が少ない場合、衣装弱参照頂点を確認する
                 target_bone_vidxs = list((set(skin_vidxs) | set(cloth_vidxs)) & set(bone_weak_vidxs))
 
-            if 8 > len(target_bone_vidxs):
+            if 20 > len(target_bone_vidxs):
                 continue
 
             for vidx in target_bone_vidxs:
@@ -689,7 +692,7 @@ class VroidExportService:
 
             if rigidbody_name in ["上半身2", "上半身3"]:
                 # ちょっと後ろにずらす
-                shape_position.setZ(shape_position.z() + (x_size * 0.3))
+                shape_position.setZ(shape_position.z() + (x_size * 0.5))
 
             shape_size = MVector3D(x_size, y_size, x_size) * rigidbody_param.get("ratio", MVector3D(1, 1, 1))
 
@@ -714,22 +717,26 @@ class VroidExportService:
                             weights=[0.3, 0.7],
                         )
                     )
+                elif "後頭部" in rigidbody_name:
+                    shape_position = MVector3D(np.average(target_vposes, axis=0, weights=target_vweights))
+                    shape_position.setZ(shape_position.z() + (x_size * 0.3))
                 elif "頭" in rigidbody_name:
-                    shape_position = MVector3D(
-                        np.average(
-                            [shape_position.data(), np.average(target_vposes, axis=0, weights=target_vweights)],
-                            axis=0,
-                            weights=[0.5, 0.5],
-                        )
-                    )
+                    shape_position = MVector3D(np.average(target_vposes, axis=0, weights=target_vweights))
+                    shape_position.setY(shape_position.y() + (x_size * 0.3))
+                    shape_position.setZ(shape_position.z() - (x_size * 0.1))
 
-            if "足首" in rigidbody_name:
+            if "足首" in rigidbody_name or "首" == rigidbody_name or "太もも" in rigidbody_name:
                 mat = MMatrix4x4()
                 mat.setToIdentity()
                 mat.translate(shape_position)
                 mat.rotate(bone_shape_qq)
 
-                shape_position = mat * MVector3D(0, -y_size * 0.15, x_size * 0.2)
+                if "足首" in rigidbody_name:
+                    shape_position = mat * MVector3D(0, -y_size * 0.15, x_size * 0.2)
+                elif "首" == rigidbody_name:
+                    shape_position = mat * MVector3D(0, 0, x_size * 0.3)
+                elif "太もも" in rigidbody_name:
+                    shape_position = mat * MVector3D(x_size * 0.1 * np.sign(bone.position.x()), 0, -x_size * 0.1)
 
             if rigidbody_param["direction"] == "horizonal":
                 # ボーン進行方向(x)
@@ -4158,7 +4165,7 @@ RIGIDBODY_PAIRS = {
         "no_collision_group": [0, 1, 2],
         "direction": "vertical",
         "range": "all",
-        "ratio": MVector3D(0.8, 0.7, 1),
+        "ratio": MVector3D(0.6, 0.7, 1),
     },
     "頭": {
         "bone": "頭",
@@ -4167,7 +4174,17 @@ RIGIDBODY_PAIRS = {
         "shape": 0,
         "no_collision_group": [0, 1, 2],
         "direction": "reverse",
-        "range": "all",
+        "range": "lower",
+        "ratio": MVector3D(0.6, 1, 1),
+    },
+    "後頭部": {
+        "bone": "頭",
+        "english": "J_Bip_C_HeadBack",
+        "group": 0,
+        "shape": 0,
+        "no_collision_group": [0, 1, 2],
+        "direction": "reverse",
+        "range": "upper",
         "ratio": MVector3D(1, 1, 1),
     },
     "左胸": {
@@ -4178,7 +4195,7 @@ RIGIDBODY_PAIRS = {
         "no_collision_group": [0, 1, 2],
         "direction": "vertical",
         "range": "all",
-        "ratio": MVector3D(1.2, 1, 1),
+        "ratio": MVector3D(1.6, 1, 1),
     },
     "右胸": {
         "bone": "右胸",
@@ -4188,7 +4205,7 @@ RIGIDBODY_PAIRS = {
         "no_collision_group": [0, 1, 2],
         "direction": "vertical",
         "range": "all",
-        "ratio": MVector3D(1.2, 1, 1),
+        "ratio": MVector3D(1.6, 1, 1),
     },
     "左肩": {
         "bone": "左肩",
@@ -4284,6 +4301,7 @@ RIGIDBODY_PAIRS = {
         "no_collision_group": [0, 1, 2],
         "direction": "reverse",
         "range": "lower",
+        "ratio": MVector3D(0.9, 1, 1),
     },
     "左足": {
         "bone": "左足",
@@ -4340,6 +4358,7 @@ RIGIDBODY_PAIRS = {
         "no_collision_group": [0, 1, 2],
         "direction": "reverse",
         "range": "lower",
+        "ratio": MVector3D(0.9, 1, 1),
     },
     "右足": {
         "bone": "右足",
@@ -4494,7 +4513,7 @@ MORPH_PAIRS = {
     "eye_Big_R": {"name": "瞳大右", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big_L": {"name": "瞳大左", "panel": MORPH_EYE, "creates": ["EyeIris", "EyeHighlight"]},
     "eye_Big": {"name": "瞳大", "panel": MORPH_EYE, "binds": ["eye_Big_R", "eye_Big_L"]},
-    "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右", "panel": MORPH_EYE},
     "Fcl_EYE_Close_R_Bone": {
         "name": "ｳｨﾝｸ２右ボーン",
         "panel": MORPH_EYE,
@@ -4509,7 +4528,7 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_EYE_Close_R_Group": {
-        "name": "ｳｨﾝｸ２右",
+        "name": "ｳｨﾝｸ２右連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_R",
@@ -4521,7 +4540,7 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2],
     },
-    "Fcl_EYE_Close_L": {"name": "ウィンク２頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Close_L": {"name": "ウィンク２", "panel": MORPH_EYE},
     "Fcl_EYE_Close_L_Bone": {
         "name": "ウィンク２ボーン",
         "panel": MORPH_EYE,
@@ -4536,7 +4555,7 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_EYE_Close_L_Group": {
-        "name": "ウィンク２",
+        "name": "ウィンク２連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_L",
@@ -4548,8 +4567,9 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2],
     },
+    "Fcl_EYE_Close": {"name": "まばたき", "panel": MORPH_EYE},
     "Fcl_EYE_Close_Group": {
-        "name": "まばたき",
+        "name": "まばたき連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_R",
@@ -4567,8 +4587,7 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.2, 1, 0.3, 1, 0.1, 0.2, 0.2, 1, 0.3, 1, 0.1, 0.2],
     },
-    "Fcl_EYE_Close": {"name": "まばたき2", "panel": MORPH_EYE},
-    "Fcl_EYE_Joy_R": {"name": "ウィンク右頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_R_Bone": {
         "name": "ウィンク右ボーン",
         "panel": MORPH_EYE,
@@ -4583,7 +4602,7 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_EYE_Joy_R_Group": {
-        "name": "ウィンク右",
+        "name": "ウィンク右連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_R",
@@ -4595,7 +4614,7 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5],
     },
-    "Fcl_EYE_Joy_L": {"name": "ウィンク頂点", "panel": MORPH_EYE},
+    "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L_Bone": {
         "name": "ウィンクボーン",
         "panel": MORPH_EYE,
@@ -4610,7 +4629,7 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_EYE_Joy_L_Group": {
-        "name": "ウィンク",
+        "name": "ウィンク連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_L",
@@ -4622,8 +4641,9 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5],
     },
+    "Fcl_EYE_Joy": {"name": "笑い", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_Group": {
-        "name": "笑い",
+        "name": "笑い連動",
         "panel": MORPH_EYE,
         "binds": [
             "brow_Below_R",
@@ -4641,7 +4661,6 @@ MORPH_PAIRS = {
         ],
         "ratios": [0.5, 1, 0.3, 1, 0.1, 0.5, 0.5, 1, 0.3, 1, 0.1, 0.5],
     },
-    "Fcl_EYE_Joy": {"name": "笑い2", "panel": MORPH_EYE},
     "Fcl_EYE_Fun_R": {"name": "目を細める右", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun_L": {"name": "目を細める左", "panel": MORPH_EYE, "split": "Fcl_EYE_Fun"},
     "Fcl_EYE_Fun": {"name": "目を細める", "panel": MORPH_EYE},

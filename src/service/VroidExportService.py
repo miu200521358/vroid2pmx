@@ -227,7 +227,7 @@ class VroidExportService:
                 bkey = bname[bname.find(RABBIT_EAR_NAME) - 3 : bname.find(RABBIT_EAR_NAME) + len(RABBIT_EAR_NAME)]
                 if bkey not in rabbit_ear_bones:
                     rabbit_ear_bones[bkey] = []
-                if 2 > rabbit_ear_bones[bkey]:
+                if 2 > len(rabbit_ear_bones[bkey]):
                     rabbit_ear_bones[bkey].append(bname)
 
         node_bone_names = {}
@@ -364,6 +364,7 @@ class VroidExportService:
                         "rigidbody_root_thick": 0.2,
                         "rigidbody_end_thick": 0.4,
                     }
+                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", f"髪H{ahoge_cnt}")
                     ahoge_cnt += 1
                 else:
                     pmx_tailor_settings[(HAIR_AHOGE, material_name)]["target_bones"].append(hbones)
@@ -382,6 +383,7 @@ class VroidExportService:
                         "rigidbody_root_thick": 0.3,
                         "rigidbody_end_thick": 1.2,
                     }
+                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", f"髪S{short_cnt}")
                     short_cnt += 1
                 else:
                     pmx_tailor_settings[(HAIR_SHORT, material_name)]["target_bones"].append(hbones)
@@ -400,11 +402,10 @@ class VroidExportService:
                         "rigidbody_root_thick": 0.2,
                         "rigidbody_end_thick": 0.5,
                     }
+                    logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", f"髪L{long_cnt}")
                     long_cnt += 1
                 else:
                     pmx_tailor_settings[(HAIR_LONG, material_name)]["target_bones"].append(hbones)
-
-        logger.info("-- -- PmxTailor用設定ファイル出力準備2 (%s)", list(pmx_tailor_settings.keys()))
 
         CLOTHING_COATSKIRT = logger.transtext("単一揺れ物")
         CLOTHING_SKIRT = logger.transtext("単一揺れ物")
@@ -771,7 +772,7 @@ class VroidExportService:
                 shape_size,
                 shape_position,
                 shape_rotation_radians,
-                1,
+                10,
                 0.5,
                 0.5,
                 0,

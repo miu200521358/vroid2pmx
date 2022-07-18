@@ -22,12 +22,27 @@ cdef class Deform:
     def copy(self):
         return Deform(self.index0)
 
+    def get_idx_list(self, weight=0):
+        return []
+
+    def get_weights(self):
+        return []
+
+    def get_weight(self, bone_idx):
+        return 0
+
 class Bdef1(Deform):
     def __init__(self, index0):
         self.index0 = index0
     
     def get_idx_list(self, weight=0):
         return [self.index0]
+    
+    def get_weights(self):
+        return [1]
+
+    def get_weight(self, bone_idx):
+        return (1 if self.index0 == bone_idx else 0)
         
     def __str__(self):
         return "<Bdef1 {0}>".format(self.index0)
@@ -48,7 +63,13 @@ class Bdef2(Deform):
         if (1 - self.weight0) >= weight:
             idx_list.append(self.index1)
         return idx_list
+    
+    def get_weights(self):
+        return [self.weight0, 1 - self.weight0]
         
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Bdef2 {0}, {1}, {2}>".format(self.index0, self.index1, self.weight0)
 
@@ -69,6 +90,12 @@ class Bdef4(Deform):
     def get_idx_list(self, weight=0):
         weight_idxs = np.where(np.array([self.weight0, self.weight1, self.weight2, self.weight3]) >= weight)
         return (np.array([self.index0, self.index1, self.index2, self.index3])[weight_idxs]).tolist()
+    
+    def get_weights(self):
+        return [self.weight0, self.weight1, self.weight2, self.weight3]
+        
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else self.weight1 if self.index1 == bone_idx else self.weight2 if self.index2 == bone_idx else self.weight3 if self.index3 == bone_idx else 0)
 
     def __str__(self):
         return "<Bdef4 {0}:{1}, {2}:{3}, {4}:{5}, {6}:{7}>".format(self.index0, self.index1, self.index2, self.index3, self.weight0, self.weight1, self.weight2, self.weight3)
@@ -88,6 +115,12 @@ class Sdef(Deform):
     def get_idx_list(self):
         return [self.index0, self.index1]
 
+    def get_weights(self):
+        return [self.weight0, 1 - self.weight0]
+        
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Sdef {0}, {1}, {2}, {3} {4} {5}>".format(self.index0, self.index1, self.weight0, self.sdef_c, self.sdef_r0, self.sdef_r1)
 
@@ -106,6 +139,12 @@ class Qdef(Deform):
     def get_idx_list(self):
         return [self.index0, self.index1]
 
+    def get_weights(self):
+        return [self.weight0, 1 - self.weight0]
+        
+    def get_weight(self, bone_idx):
+        return (self.weight0 if self.index0 == bone_idx else 1 - self.weight0 if self.index1 == bone_idx else 0)
+                
     def __str__(self):
         return "<Sdef {0}, {1}, {2}, {3} {4} {5}>".format(self.index0, self.index1, self.weight0, self.sdef_c, self.sdef_r0, self.sdef_r1)
 
@@ -504,6 +543,10 @@ cdef class RigidBody:
         self.bone_name = ""
         self.is_arm_upper = False
         self.is_small = False
+        self.shape_qq = MQuaternion()
+        self.x_direction = MVector3D()
+        self.y_direction = MVector3D()
+        self.z_direction = MVector3D()
 
         self.SHAPE_SPHERE = 0
         self.SHAPE_BOX = 1
@@ -1016,6 +1059,7 @@ cdef class Capsule(OBB):
 class Joint:
     def __init__(self, name, english_name, joint_type, rigidbody_index_a, rigidbody_index_b, position, rotation, \
                  translation_limit_min, translation_limit_max, rotation_limit_min, rotation_limit_max, spring_constant_translation, spring_constant_rotation):
+        self.index = -1
         self.name = name
         self.english_name = english_name
         self.joint_type = joint_type

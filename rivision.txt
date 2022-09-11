@@ -258,6 +258,10 @@ Vroid2Pmx_2.01.00_β02 (2022/07/12) miumiu
 ・身体剛体の重さ変更（より重く布物理に勝てるよう）
 ・うさ耳のPmxTailor用設定ファイル生成処理の判定ミスってたので修正
 
+https://fire.st/ppnorQy
+Vroid2Pmx_2.01.01_β01 (2022/08/06) miumiu
+・追加テクスチャ読み込み時にPermissionエラーが出る場合があったのを修正
+
 
 
 Vroid2Pmx_1.01.00_β13 をβリリースしました！
@@ -278,10 +282,9 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-https://fire.st/pXqiu5x
+https://fire.st/ppnorQy
 <br>
 <br>
-・身体剛体の重さ変更（より重く布物理に勝てるよう）<br>
-・うさ耳のPmxTailor用設定ファイル生成処理の判定ミスってたので修正<br>
+・追加テクスチャ読み込み時にPermissionエラーが出る場合があったのを修正<br>
 <br>
 ぜひ使っていただいて、感想・不具合報告等お願いいたします。<br>

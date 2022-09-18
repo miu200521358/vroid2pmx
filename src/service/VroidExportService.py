@@ -1733,51 +1733,56 @@ class VroidExportService:
                     tongue_poses.append(v.position.data())
                     v.deform = Bdef1(model.bones["舌1"].index)
 
-            # 舌ボーン位置配置
-            tongue1_pos = np.max(tongue_poses, axis=0)
-            model.bones["舌1"].position = MVector3D(0, tongue1_pos[1], tongue1_pos[2])
-            tongue4_pos = np.min(tongue_poses, axis=0)
-            model.bones["舌4"].position = MVector3D(0, tongue4_pos[1], tongue4_pos[2])
-            model.bones["舌2"].position = model.bones["舌1"].position + (
-                (model.bones["舌4"].position - model.bones["舌1"].position) * 0.4
-            )
-            model.bones["舌3"].position = model.bones["舌1"].position + (
-                (model.bones["舌4"].position - model.bones["舌1"].position) * 0.7
-            )
+            if tongue_poses and tongue_vertices and tongue_vidxs:
+                # 舌ボーン位置配置
+                tongue1_pos = np.max(tongue_poses, axis=0)
+                model.bones["舌1"].position = MVector3D(0, tongue1_pos[1], tongue1_pos[2])
+                tongue4_pos = np.min(tongue_poses, axis=0)
+                model.bones["舌4"].position = MVector3D(0, tongue4_pos[1], tongue4_pos[2])
+                model.bones["舌2"].position = model.bones["舌1"].position + (
+                    (model.bones["舌4"].position - model.bones["舌1"].position) * 0.4
+                )
+                model.bones["舌3"].position = model.bones["舌1"].position + (
+                    (model.bones["舌4"].position - model.bones["舌1"].position) * 0.7
+                )
 
-            for from_bone_name, to_bone_name in [("舌1", "舌2"), ("舌2", "舌3"), ("舌3", "舌4")]:
-                # ローカル軸
-                model.bones[from_bone_name].local_x_vector = (
-                    model.bones[to_bone_name].position - model.bones[from_bone_name].position
-                ).normalized()
-                model.bones[from_bone_name].local_z_vector = MVector3D.crossProduct(
-                    model.bones[from_bone_name].local_x_vector, MVector3D(0, -1, 0)
-                ).normalized()
-            model.bones["舌4"].local_x_vector = model.bones["舌3"].local_x_vector.copy()
-            model.bones["舌4"].local_z_vector = model.bones["舌3"].local_z_vector.copy()
-
-            for vertex in tongue_vertices:
                 for from_bone_name, to_bone_name in [("舌1", "舌2"), ("舌2", "舌3"), ("舌3", "舌4")]:
-                    tongue_distance = model.bones[to_bone_name].position.z() - model.bones[from_bone_name].position.z()
-                    vertex_distance = vertex.position.z() - model.bones[from_bone_name].position.z()
+                    # ローカル軸
+                    model.bones[from_bone_name].local_x_vector = (
+                        model.bones[to_bone_name].position - model.bones[from_bone_name].position
+                    ).normalized()
+                    model.bones[from_bone_name].local_z_vector = MVector3D.crossProduct(
+                        model.bones[from_bone_name].local_x_vector, MVector3D(0, -1, 0)
+                    ).normalized()
+                model.bones["舌4"].local_x_vector = model.bones["舌3"].local_x_vector.copy()
+                model.bones["舌4"].local_z_vector = model.bones["舌3"].local_z_vector.copy()
 
-                    if np.sign(tongue_distance) == np.sign(vertex_distance):
-                        # 範囲内である場合、ウェイト分布
-                        vertex.deform = Bdef2(
-                            model.bones[to_bone_name].index,
-                            model.bones[from_bone_name].index,
-                            vertex_distance / tongue_distance,
+                for vertex in tongue_vertices:
+                    for from_bone_name, to_bone_name in [("舌1", "舌2"), ("舌2", "舌3"), ("舌3", "舌4")]:
+                        tongue_distance = (
+                            model.bones[to_bone_name].position.z() - model.bones[from_bone_name].position.z()
                         )
+                        vertex_distance = vertex.position.z() - model.bones[from_bone_name].position.z()
 
-            # 舌頂点モーフを削除
-            for morph in model.org_morphs.values():
-                if morph.morph_type == 1:
-                    # 頂点モーフの場合
-                    without_tongue_offsets = []
-                    for offset in morph.offsets:
-                        if offset.vertex_index not in tongue_vidxs:
-                            without_tongue_offsets.append(offset)
-                    morph.offsets = without_tongue_offsets
+                        if np.sign(tongue_distance) == np.sign(vertex_distance):
+                            # 範囲内である場合、ウェイト分布
+                            vertex.deform = Bdef2(
+                                model.bones[to_bone_name].index,
+                                model.bones[from_bone_name].index,
+                                vertex_distance / tongue_distance,
+                            )
+
+                # 舌頂点モーフを削除
+                for morph in model.org_morphs.values():
+                    if morph.morph_type == 1:
+                        # 頂点モーフの場合
+                        without_tongue_offsets = []
+                        for offset in morph.offsets:
+                            if offset.vertex_index not in tongue_vidxs:
+                                without_tongue_offsets.append(offset)
+                        morph.offsets = without_tongue_offsets
+            else:
+                logger.warning("舌関連頂点が見つからなかったため、舌分離処理をスキップします", decoration=MLogger.DECORATION_BOX)
 
         logger.info("-- ボーンデータ調整終了")
 

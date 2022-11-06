@@ -136,7 +136,7 @@ class VroidExportService:
             if not model:
                 return False
 
-            model = self.transfer_astance(model)
+            model = self.transfer_stance(model)
             if not model:
                 return False
 
@@ -788,7 +788,7 @@ class VroidExportService:
 
         return model
 
-    def transfer_astance(self, model: PmxModel):
+    def transfer_stance(self, model: PmxModel):
         # 各頂点
         all_vertex_relative_poses = {}
         for vertex in model.vertex_dict.values():
@@ -851,22 +851,38 @@ class VroidExportService:
             trans_vs = MServiceUtils.calc_relative_position(model, bone_links, VmdMotion(), 0)
 
             if "右" in ",".join(list(bone_links.all().keys())):
-                astance_qq = MQuaternion.fromEulerAngles(0, 0, 35)
+                arm_astance_qq = MQuaternion.fromEulerAngles(0, 0, 35)
                 arm_bone_name = "右腕"
+                thumb0_stance_qq = MQuaternion.fromEulerAngles(0, 8, 0)
+                thumb0_bone_name = "右親指０"
+                thumb1_stance_qq = MQuaternion.fromEulerAngles(0, 24, 0)
+                thumb1_bone_name = "右親指１"
             elif "左" in ",".join(list(bone_links.all().keys())):
-                astance_qq = MQuaternion.fromEulerAngles(0, 0, -35)
+                arm_astance_qq = MQuaternion.fromEulerAngles(0, 0, -35)
                 arm_bone_name = "左腕"
+                thumb0_stance_qq = MQuaternion.fromEulerAngles(0, -8, 0)
+                thumb0_bone_name = "左親指０"
+                thumb1_stance_qq = MQuaternion.fromEulerAngles(0, -24, 0)
+                thumb1_bone_name = "左親指１"
             else:
-                astance_qq = MQuaternion.fromEulerAngles(0, 0, 0)
+                arm_astance_qq = MQuaternion.fromEulerAngles(0, 0, 0)
                 arm_bone_name = ""
+                thumb0_bone_name = ""
+                thumb1_bone_name = ""
 
             mat = MMatrix4x4()
             mat.setToIdentity()
             for vi, (bone_name, trans_v) in enumerate(zip(bone_links.all().keys(), trans_vs)):
                 mat.translate(trans_v)
                 if bone_name == arm_bone_name:
-                    # 腕だけ回転させる
-                    mat.rotate(astance_qq)
+                    # 腕回転させる
+                    mat.rotate(arm_astance_qq)
+                elif bone_name == thumb0_bone_name:
+                    # 親指0回転させる
+                    mat.rotate(thumb0_stance_qq)
+                elif bone_name == thumb1_bone_name:
+                    # 親指1回転させる
+                    mat.rotate(thumb1_stance_qq)
 
                 if bone_name not in trans_bone_vecs:
                     trans_bone_vecs[bone_name] = mat * MVector3D()
@@ -1005,7 +1021,7 @@ class VroidExportService:
             model.vertex_dict[vertex_idx].position = vertex_vec
             model.vertex_dict[vertex_idx].normal = vertex_normal.normalized()
 
-        logger.info("-- Aスタンス調整終了")
+        logger.info("-- Aスタンス・親指調整終了")
 
         return model
 

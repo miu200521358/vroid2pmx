@@ -410,5 +410,6 @@
     "-- -- PmxTailor用設定ファイル出力準備2 (%s)": "---- Preparation for output of configuration file for PmxTailor 2 ( %s)",
     "-- 身体剛体準備終了": "--Completion of body rigid body preparation",
     "-- -- 身体剛体[%s]": "---- Body Rigid Body [ %s]",
-    "舌関連頂点が見つからなかったため、舌分離処理をスキップします": "No tongue-related vertices found, skipping tongue separation processing"
+    "舌関連頂点が見つからなかったため、舌分離処理をスキップします": "No tongue-related vertices found, skipping tongue separation processing",
+    "-- Aスタンス・親指調整終了": "-- Finished A stance/thumb adjustment"
 }

@@ -123,3 +123,6 @@ dmypy.json
 
 history.json
 *.zip
+src/example.py
+test/resources/サンプルモデル.pmx
+test/resources/サンプルモーション.vmd

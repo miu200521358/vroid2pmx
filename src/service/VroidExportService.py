@@ -2020,6 +2020,10 @@ class VroidExportService:
                     edge_size = material_ext["floatProperties"]["_OutlineWidth"] * MIKU_METER
                     # エッジ描画は透明ポリの裏面がエッジ色で塗りつぶされてしまうので、ここでフラグはONにしない
 
+                    sphere_mode = 2
+                    texture_index = 0
+                    sphere_texture_index = 0
+
                     # 0番目は空テクスチャなので+1で設定
                     m = re.search(hair_regexp, material_name)
                     if m is not None:
@@ -2031,17 +2035,54 @@ class VroidExportService:
                         hair_img_number = -1
                         if hm is not None:
                             hair_img_number = int(hm.groups()[0])
-                        hair_spe_name = f"_{(hair_img_number + 1):02d}.png"
+
+                        # 髪テクスチャはそのまま保持
+                        model.textures.append(os.path.join("tex", hair_img_name))
+                        texture_index = len(model.textures) - 1
+
+                        # スフィアファイルをコピー
+                        hair_spe_name = f"hair_sphere_{hair_img_number}.png"
+                        shutil.copy(
+                            MFileUtils.resource_path(f"src/resources/hair_sphere.png"),
+                            os.path.join(tex_dir_path, hair_spe_name),
+                        )
+                        model.textures.append(os.path.join("tex", hair_spe_name))
+                        sphere_texture_index = len(model.textures) - 1
+
+                        spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert("RGBA")
+                        spe_ary = np.array(spe_img)
+
+                        # 反射色の画像
+                        if "emissiveFactor" in vrm_material:
+                            emissive_ary = np.array(vrm_material["emissiveFactor"])
+                            emissive_ary = np.append(emissive_ary, 1)
+                        else:
+                            # なかった場合には仮に明るめの色を入れておく
+                            logger.warning("髪の反射色がVrmデータになかったため、仮に白色を差し込みます", decoration=MLogger.DECORATION_BOX)
+                            emissive_ary = np.array([0.9, 0.9, 0.9, 1])
+
+                        # 反射色だけの画像生成
+                        emissive_img = Image.fromarray(
+                            np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8),
+                            mode="RGBA",
+                        )
+                        # 乗算して保存
+                        hair_emissive_img = ImageChops.multiply(spe_img, emissive_img)
+                        hair_emissive_img.save(os.path.join(tex_dir_path, hair_spe_name))
+
+                        # ---------
+                        # 髪の毛にハイライトを焼き込んだ画像も作るだけ作っておく
+                        hair_spe_only_name = f"_{(hair_img_number + 1):02d}.png"
                         hair_blend_name = f"_{hair_img_number:02d}_blend.png"
 
                         if os.path.exists(os.path.join(tex_dir_path, hair_img_name)) and os.path.exists(
-                            os.path.join(tex_dir_path, hair_spe_name)
+                            os.path.join(tex_dir_path, hair_spe_only_name)
                         ):
                             # スペキュラファイルがある場合
                             hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name)).convert("RGBA")
                             hair_ary = np.array(hair_img)
 
-                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert("RGBA")
+                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_only_name)).convert("RGBA")
                             spe_ary = np.array(spe_img)
 
                             # 拡散色の画像
@@ -2069,56 +2110,45 @@ class VroidExportService:
                             # スクリーン
                             dest_img = ImageChops.screen(hair_diffuse_img, hair_emissive_img)
                             dest_img.save(os.path.join(tex_dir_path, hair_blend_name))
-
-                            model.textures.append(os.path.join("tex", hair_blend_name))
-                            texture_index = len(model.textures) - 1
-
-                            # # 拡散色と環境色は固定
-                            # diffuse_color = MVector3D(1, 1, 1)
-                            # specular_color = MVector3D()
-                            # ambient_color = diffuse_color * 0.5
-                        else:
-                            # スペキュラがない場合、ないし反映させない場合、そのまま設定
-                            texture_index = material_ext["textureProperties"]["_MainTex"] + 1
-                    elif diffuse_color_data[:] != [1, 1, 1, 1]:
-                        # 基本色が設定されている場合、加算しておく
-                        logger.warning(
-                            "基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX
-                        )
-
-                        base_img_name = os.path.basename(
-                            model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
-                        )
-                        bm = re.search(tex_regexp, base_img_name)
-                        base_img_number = -1
-                        if bm is not None:
-                            base_img_number = int(bm.groups()[0])
-                        base_blend_name = f"_{base_img_number:02d}_blend.png"
-
-                        base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
-                        base_ary = np.array(base_img)
-
-                        add_img = Image.fromarray(
-                            np.tile(
-                                np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)
-                            ).astype(np.uint8),
-                            mode="RGBA",
-                        )
-                        base_add_img = ImageChops.multiply(base_img, add_img)
-                        base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
-
-                        model.textures.append(os.path.join("tex", base_blend_name))
-                        texture_index = len(model.textures) - 1
                     else:
-                        # そのまま出力
-                        texture_index = material_ext["textureProperties"]["_MainTex"] + 1
+                        if diffuse_color_data[:] != [1, 1, 1, 1]:
+                            # 基本色が設定されている場合、加算しておく
+                            logger.warning(
+                                "基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX
+                            )
 
-                    sphere_texture_index = 0
-                    sphere_mode = 0
-                    if "_SphereAdd" in material_ext["textureProperties"]:
-                        sphere_texture_index = material_ext["textureProperties"]["_SphereAdd"] + 1
-                        # 加算スフィア
-                        sphere_mode = 2
+                            base_img_name = os.path.basename(
+                                model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
+                            )
+                            bm = re.search(tex_regexp, base_img_name)
+                            base_img_number = -1
+                            if bm is not None:
+                                base_img_number = int(bm.groups()[0])
+                            base_blend_name = f"_{base_img_number:02d}_blend.png"
+
+                            base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
+                            base_ary = np.array(base_img)
+
+                            add_img = Image.fromarray(
+                                np.tile(
+                                    np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)
+                                ).astype(np.uint8),
+                                mode="RGBA",
+                            )
+                            base_add_img = ImageChops.multiply(base_img, add_img)
+                            base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
+
+                            model.textures.append(os.path.join("tex", base_blend_name))
+                            sphere_texture_index = len(model.textures) - 1
+                        else:
+                            # そのまま出力
+                            texture_index = material_ext["textureProperties"]["_MainTex"] + 1
+
+                        sphere_texture_index = 0
+                        if "_SphereAdd" in material_ext["textureProperties"]:
+                            sphere_texture_index = material_ext["textureProperties"]["_SphereAdd"] + 1
+                            # 加算スフィア
+                            sphere_mode = 2
 
                     if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
                         toon_sharing_flag = 0

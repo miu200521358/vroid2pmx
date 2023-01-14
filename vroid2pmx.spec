@@ -19,14 +19,14 @@ a = Analysis(['src\\executor.py'],
              noarchive=False)
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
-a.datas += [('.\\src\\vroid2pmx.ico','.\\src\\vroid2pmx.ico', 'Data'), ('.\\src\\resources\\cheek_dye.png','.\\src\\resources\\cheek_dye.png', 'Data'), ('.\\src\\resources\\eye_heart.png','.\\src\\resources\\eye_heart.png', 'Data'), ('.\\src\\resources\\eye_star.png','.\\src\\resources\\eye_star.png', 'Data'), ('.\\src\\resources\\eye_hau.png','.\\src\\resources\\eye_hau.png', 'Data'), ('.\\src\\resources\\eye_hachume.png','.\\src\\resources\\eye_hachume.png', 'Data'), ('.\\src\\resources\\eye_nagomi.png','.\\src\\resources\\eye_nagomi.png', 'Data'), ('.\\src\\locale\\en_US\\messages.json','.\\src\\locale\\en_US\\messages.json', 'Data'), ('.\\src\\locale\\ja_JP\\messages.json','.\\src\\locale\\ja_JP\\messages.json', 'Data'), ('.\\src\\locale\\zh_CN\\messages.json','.\\src\\locale\\zh_CN\\messages.json', 'Data')]
+a.datas += [('.\\src\\vroid2pmx.ico','.\\src\\vroid2pmx.ico', 'Data'), ('.\\src\\resources\\cheek_dye.png','.\\src\\resources\\cheek_dye.png', 'Data'), ('.\\src\\resources\\eye_heart.png','.\\src\\resources\\eye_heart.png', 'Data'), ('.\\src\\resources\\eye_star.png','.\\src\\resources\\eye_star.png', 'Data'), ('.\\src\\resources\\hair_sphere.png','.\\src\\resources\\hair_sphere.png', 'Data'), ('.\\src\\resources\\eye_hau.png','.\\src\\resources\\eye_hau.png', 'Data'), ('.\\src\\resources\\eye_hachume.png','.\\src\\resources\\eye_hachume.png', 'Data'), ('.\\src\\resources\\eye_nagomi.png','.\\src\\resources\\eye_nagomi.png', 'Data'), ('.\\src\\locale\\en_US\\messages.json','.\\src\\locale\\en_US\\messages.json', 'Data'), ('.\\src\\locale\\ja_JP\\messages.json','.\\src\\locale\\ja_JP\\messages.json', 'Data'), ('.\\src\\locale\\zh_CN\\messages.json','.\\src\\locale\\zh_CN\\messages.json', 'Data')]
 exe = EXE(pyz,
           a.scripts,
           a.binaries,
           a.zipfiles,
           a.datas,
           [],
-          name='Vroid2Pmx_2.01.01',
+          name='Vroid2Pmx_2.01.02_β01',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,

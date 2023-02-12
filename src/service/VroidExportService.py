@@ -2139,7 +2139,7 @@ class VroidExportService:
                             base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
 
                             model.textures.append(os.path.join("tex", base_blend_name))
-                            sphere_texture_index = len(model.textures) - 1
+                            texture_index = len(model.textures) - 1
                         else:
                             # そのまま出力
                             texture_index = material_ext["textureProperties"]["_MainTex"] + 1
@@ -4451,6 +4451,7 @@ RIGIDBODY_PAIRS = {
     },
 }
 
+MORPH_SYSTEM = 0
 MORPH_EYEBROW = 1
 MORPH_EYE = 2
 MORPH_LIP = 3
@@ -4568,7 +4569,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右", "panel": MORPH_EYE},
     "Fcl_EYE_Close_R_Bone": {
         "name": "ｳｨﾝｸ２右ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "右目光",
         ],
@@ -4595,7 +4596,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close_L": {"name": "ウィンク２", "panel": MORPH_EYE},
     "Fcl_EYE_Close_L_Bone": {
         "name": "ウィンク２ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "左目光",
         ],
@@ -4642,7 +4643,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_R_Bone": {
         "name": "ウィンク右ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "右目光",
         ],
@@ -4669,7 +4670,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L_Bone": {
         "name": "ウィンクボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "左目光",
         ],
@@ -4752,10 +4753,15 @@ MORPH_PAIRS = {
         "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"],
         "ratios": [1, 1, 1, 1],
     },
-    "eye_Hide_Vertex": {"name": "目隠し頂点", "panel": MORPH_EYE, "creates": ["EyeWhite"], "hides": ["Eyeline", "Eyelash"]},
+    "eye_Hide_Vertex": {
+        "name": "目隠し頂点",
+        "panel": MORPH_SYSTEM,
+        "creates": ["EyeWhite"],
+        "hides": ["Eyeline", "Eyelash"],
+    },
     "eye_Hau_Material": {
         "name": "はぅ材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_hau",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4766,7 +4772,7 @@ MORPH_PAIRS = {
     },
     "eye_Hachume_Material": {
         "name": "はちゅ目材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_hachume",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4777,7 +4783,7 @@ MORPH_PAIRS = {
     },
     "eye_Nagomi_Material": {
         "name": "なごみ材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_nagomi",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4786,8 +4792,8 @@ MORPH_PAIRS = {
         "panel": MORPH_EYE,
         "binds": ["eye_Nagomi_Material", "eye_Hide_Vertex"],
     },
-    "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
-    "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},
+    "eye_Star_Material": {"name": "星目材質", "panel": MORPH_SYSTEM, "material": "eye_star"},
+    "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_SYSTEM, "material": "eye_heart"},
     "eye_Star": {"name": "星目", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Star_Material"]},
     "eye_Heart": {"name": "はぁと", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Heart_Material"]},
     "Fcl_EYE_Natural": {"name": "ナチュラル", "panel": MORPH_EYE},
@@ -4824,10 +4830,10 @@ MORPH_PAIRS = {
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
     "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
-    "Fcl_MTH_A": {"name": "あ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_A": {"name": "あ頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_A_Bone": {
         "name": "あボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4845,10 +4851,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_A_Group": {"name": "あ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_A", "Fcl_MTH_A_Bone"]},
-    "Fcl_MTH_I": {"name": "い頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_I": {"name": "い頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_I_Bone": {
         "name": "いボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4866,10 +4872,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_I_Group": {"name": "い", "panel": MORPH_LIP, "binds": ["Fcl_MTH_I", "Fcl_MTH_I_Bone"]},
-    "Fcl_MTH_U": {"name": "う頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_U": {"name": "う頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_U_Bone": {
         "name": "うボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4887,10 +4893,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_U_Group": {"name": "う", "panel": MORPH_LIP, "binds": ["Fcl_MTH_U", "Fcl_MTH_U_Bone"]},
-    "Fcl_MTH_E": {"name": "え頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_E": {"name": "え頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_E_Bone": {
         "name": "えボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4908,10 +4914,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_E_Group": {"name": "え", "panel": MORPH_LIP, "binds": ["Fcl_MTH_E", "Fcl_MTH_E_Bone"]},
-    "Fcl_MTH_O": {"name": "お頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_O": {"name": "お頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_O_Bone": {
         "name": "おボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4977,10 +4983,10 @@ MORPH_PAIRS = {
         "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
         "ratios": [0.5, 0.5, -0.3],
     },
-    "Fcl_MTH_Joy": {"name": "ワ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Joy": {"name": "ワ頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Joy_Bone": {
         "name": "ワボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5001,10 +5007,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_Joy_Group": {"name": "ワ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Joy", "Fcl_MTH_Joy_Bone"]},
-    "Fcl_MTH_Sorrow": {"name": "▲頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Sorrow": {"name": "▲頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Sorrow_Bone": {
         "name": "▲ボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5022,10 +5028,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_Sorrow_Group": {"name": "▲", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Sorrow", "Fcl_MTH_Sorrow_Bone"]},
-    "Fcl_MTH_Surprised": {"name": "わー頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Surprised": {"name": "わー頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Surprised_Bone": {
         "name": "わーボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5052,7 +5058,7 @@ MORPH_PAIRS = {
     },
     "Fcl_MTH_tongueOut": {
         "name": "べーボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5077,7 +5083,7 @@ MORPH_PAIRS = {
     },
     "Fcl_MTH_tongueUp": {
         "name": "ぺろりボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",

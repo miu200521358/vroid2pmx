@@ -30,7 +30,7 @@ if __name__ == "__main__":
         ),
         (
             f"..\dist\{APP_NAME}_{VERSION_NAME}.exe - デバッグ版.lnk",
-            f'/c start "%cd%" "{APP_NAME}_{VERSION_NAME}.exe" --verbose 10 --out_log 0 --lang ja_JP',
+            f'/c start "%cd%" "{APP_NAME}_{VERSION_NAME}.exe" --verbose 10 --out_log 1 --lang ja_JP',
             f'"%SystemRoot%\System32\SHELL32.dll, 0"',
         ),
         (

@@ -2020,6 +2020,10 @@ class VroidExportService:
                     edge_size = material_ext["floatProperties"]["_OutlineWidth"] * MIKU_METER
                     # エッジ描画は透明ポリの裏面がエッジ色で塗りつぶされてしまうので、ここでフラグはONにしない
 
+                    sphere_mode = 2
+                    texture_index = 0
+                    sphere_texture_index = 0
+
                     # 0番目は空テクスチャなので+1で設定
                     m = re.search(hair_regexp, material_name)
                     if m is not None:
@@ -2031,17 +2035,54 @@ class VroidExportService:
                         hair_img_number = -1
                         if hm is not None:
                             hair_img_number = int(hm.groups()[0])
-                        hair_spe_name = f"_{(hair_img_number + 1):02d}.png"
+
+                        # 髪テクスチャはそのまま保持
+                        model.textures.append(os.path.join("tex", hair_img_name))
+                        texture_index = len(model.textures) - 1
+
+                        # スフィアファイルをコピー
+                        hair_spe_name = f"hair_sphere_{hair_img_number}.png"
+                        shutil.copy(
+                            MFileUtils.resource_path(f"src/resources/hair_sphere.png"),
+                            os.path.join(tex_dir_path, hair_spe_name),
+                        )
+                        model.textures.append(os.path.join("tex", hair_spe_name))
+                        sphere_texture_index = len(model.textures) - 1
+
+                        spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert("RGBA")
+                        spe_ary = np.array(spe_img)
+
+                        # 反射色の画像
+                        if "emissiveFactor" in vrm_material:
+                            emissive_ary = np.array(vrm_material["emissiveFactor"])
+                            emissive_ary = np.append(emissive_ary, 1)
+                        else:
+                            # なかった場合には仮に明るめの色を入れておく
+                            logger.warning("髪の反射色がVrmデータになかったため、仮に白色を差し込みます", decoration=MLogger.DECORATION_BOX)
+                            emissive_ary = np.array([0.9, 0.9, 0.9, 1])
+
+                        # 反射色だけの画像生成
+                        emissive_img = Image.fromarray(
+                            np.tile(emissive_ary * 255, (spe_ary.shape[0], spe_ary.shape[1], 1)).astype(np.uint8),
+                            mode="RGBA",
+                        )
+                        # 乗算して保存
+                        hair_emissive_img = ImageChops.multiply(spe_img, emissive_img)
+                        hair_emissive_img.save(os.path.join(tex_dir_path, hair_spe_name))
+
+                        # ---------
+                        # 髪の毛にハイライトを焼き込んだ画像も作るだけ作っておく
+                        hair_spe_only_name = f"_{(hair_img_number + 1):02d}.png"
                         hair_blend_name = f"_{hair_img_number:02d}_blend.png"
 
                         if os.path.exists(os.path.join(tex_dir_path, hair_img_name)) and os.path.exists(
-                            os.path.join(tex_dir_path, hair_spe_name)
+                            os.path.join(tex_dir_path, hair_spe_only_name)
                         ):
                             # スペキュラファイルがある場合
                             hair_img = Image.open(os.path.join(tex_dir_path, hair_img_name)).convert("RGBA")
                             hair_ary = np.array(hair_img)
 
-                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_name)).convert("RGBA")
+                            spe_img = Image.open(os.path.join(tex_dir_path, hair_spe_only_name)).convert("RGBA")
                             spe_ary = np.array(spe_img)
 
                             # 拡散色の画像
@@ -2069,56 +2110,45 @@ class VroidExportService:
                             # スクリーン
                             dest_img = ImageChops.screen(hair_diffuse_img, hair_emissive_img)
                             dest_img.save(os.path.join(tex_dir_path, hair_blend_name))
-
-                            model.textures.append(os.path.join("tex", hair_blend_name))
-                            texture_index = len(model.textures) - 1
-
-                            # # 拡散色と環境色は固定
-                            # diffuse_color = MVector3D(1, 1, 1)
-                            # specular_color = MVector3D()
-                            # ambient_color = diffuse_color * 0.5
-                        else:
-                            # スペキュラがない場合、ないし反映させない場合、そのまま設定
-                            texture_index = material_ext["textureProperties"]["_MainTex"] + 1
-                    elif diffuse_color_data[:] != [1, 1, 1, 1]:
-                        # 基本色が設定されている場合、加算しておく
-                        logger.warning(
-                            "基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX
-                        )
-
-                        base_img_name = os.path.basename(
-                            model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
-                        )
-                        bm = re.search(tex_regexp, base_img_name)
-                        base_img_number = -1
-                        if bm is not None:
-                            base_img_number = int(bm.groups()[0])
-                        base_blend_name = f"_{base_img_number:02d}_blend.png"
-
-                        base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
-                        base_ary = np.array(base_img)
-
-                        add_img = Image.fromarray(
-                            np.tile(
-                                np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)
-                            ).astype(np.uint8),
-                            mode="RGBA",
-                        )
-                        base_add_img = ImageChops.multiply(base_img, add_img)
-                        base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
-
-                        model.textures.append(os.path.join("tex", base_blend_name))
-                        texture_index = len(model.textures) - 1
                     else:
-                        # そのまま出力
-                        texture_index = material_ext["textureProperties"]["_MainTex"] + 1
+                        if diffuse_color_data[:] != [1, 1, 1, 1]:
+                            # 基本色が設定されている場合、加算しておく
+                            logger.warning(
+                                "基本色が白ではないため、加算合成します。 材質名: %s", material_name, decoration=MLogger.DECORATION_BOX
+                            )
 
-                    sphere_texture_index = 0
-                    sphere_mode = 0
-                    if "_SphereAdd" in material_ext["textureProperties"]:
-                        sphere_texture_index = material_ext["textureProperties"]["_SphereAdd"] + 1
-                        # 加算スフィア
-                        sphere_mode = 2
+                            base_img_name = os.path.basename(
+                                model.textures[material_ext["textureProperties"]["_MainTex"] + 1]
+                            )
+                            bm = re.search(tex_regexp, base_img_name)
+                            base_img_number = -1
+                            if bm is not None:
+                                base_img_number = int(bm.groups()[0])
+                            base_blend_name = f"_{base_img_number:02d}_blend.png"
+
+                            base_img = Image.open(os.path.join(tex_dir_path, base_img_name)).convert("RGBA")
+                            base_ary = np.array(base_img)
+
+                            add_img = Image.fromarray(
+                                np.tile(
+                                    np.array(diffuse_color_data) * 255, (base_ary.shape[0], base_ary.shape[1], 1)
+                                ).astype(np.uint8),
+                                mode="RGBA",
+                            )
+                            base_add_img = ImageChops.multiply(base_img, add_img)
+                            base_add_img.save(os.path.join(tex_dir_path, base_blend_name))
+
+                            model.textures.append(os.path.join("tex", base_blend_name))
+                            texture_index = len(model.textures) - 1
+                        else:
+                            # そのまま出力
+                            texture_index = material_ext["textureProperties"]["_MainTex"] + 1
+
+                        sphere_texture_index = 0
+                        if "_SphereAdd" in material_ext["textureProperties"]:
+                            sphere_texture_index = material_ext["textureProperties"]["_SphereAdd"] + 1
+                            # 加算スフィア
+                            sphere_mode = 2
 
                     if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
                         toon_sharing_flag = 0
@@ -4421,6 +4451,7 @@ RIGIDBODY_PAIRS = {
     },
 }
 
+MORPH_SYSTEM = 0
 MORPH_EYEBROW = 1
 MORPH_EYE = 2
 MORPH_LIP = 3
@@ -4538,7 +4569,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close_R": {"name": "ｳｨﾝｸ２右", "panel": MORPH_EYE},
     "Fcl_EYE_Close_R_Bone": {
         "name": "ｳｨﾝｸ２右ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "右目光",
         ],
@@ -4565,7 +4596,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Close_L": {"name": "ウィンク２", "panel": MORPH_EYE},
     "Fcl_EYE_Close_L_Bone": {
         "name": "ウィンク２ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "左目光",
         ],
@@ -4612,7 +4643,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Joy_R": {"name": "ウィンク右", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_R_Bone": {
         "name": "ウィンク右ボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "右目光",
         ],
@@ -4639,7 +4670,7 @@ MORPH_PAIRS = {
     "Fcl_EYE_Joy_L": {"name": "ウィンク", "panel": MORPH_EYE},
     "Fcl_EYE_Joy_L_Bone": {
         "name": "ウィンクボーン",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "左目光",
         ],
@@ -4722,10 +4753,15 @@ MORPH_PAIRS = {
         "binds": ["Fcl_EYE_Surprised_R", "Fcl_EYE_Angry_R", "Fcl_EYE_Surprised_L", "Fcl_EYE_Angry_L"],
         "ratios": [1, 1, 1, 1],
     },
-    "eye_Hide_Vertex": {"name": "目隠し頂点", "panel": MORPH_EYE, "creates": ["EyeWhite"], "hides": ["Eyeline", "Eyelash"]},
+    "eye_Hide_Vertex": {
+        "name": "目隠し頂点",
+        "panel": MORPH_SYSTEM,
+        "creates": ["EyeWhite"],
+        "hides": ["Eyeline", "Eyelash"],
+    },
     "eye_Hau_Material": {
         "name": "はぅ材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_hau",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4736,7 +4772,7 @@ MORPH_PAIRS = {
     },
     "eye_Hachume_Material": {
         "name": "はちゅ目材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_hachume",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4747,7 +4783,7 @@ MORPH_PAIRS = {
     },
     "eye_Nagomi_Material": {
         "name": "なごみ材質",
-        "panel": MORPH_EYE,
+        "panel": MORPH_SYSTEM,
         "material": "eye_nagomi",
         "hides": ["EyeWhite", "Eyeline", "Eyelash"],
     },
@@ -4756,8 +4792,8 @@ MORPH_PAIRS = {
         "panel": MORPH_EYE,
         "binds": ["eye_Nagomi_Material", "eye_Hide_Vertex"],
     },
-    "eye_Star_Material": {"name": "星目材質", "panel": MORPH_EYE, "material": "eye_star"},
-    "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_EYE, "material": "eye_heart"},
+    "eye_Star_Material": {"name": "星目材質", "panel": MORPH_SYSTEM, "material": "eye_star"},
+    "eye_Heart_Material": {"name": "はぁと材質", "panel": MORPH_SYSTEM, "material": "eye_heart"},
     "eye_Star": {"name": "星目", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Star_Material"]},
     "eye_Heart": {"name": "はぁと", "panel": MORPH_EYE, "binds": ["Fcl_EYE_Highlight_Hide", "eye_Heart_Material"]},
     "Fcl_EYE_Natural": {"name": "ナチュラル", "panel": MORPH_EYE},
@@ -4794,10 +4830,10 @@ MORPH_PAIRS = {
     "Fcl_EYE_Highlight_Hide": {"name": "ハイライトなし", "panel": MORPH_EYE},
     "Fcl_EYE_Highlight_Hide_R": {"name": "ハイライトなし右", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
     "Fcl_EYE_Highlight_Hide_L": {"name": "ハイライトなし左", "panel": MORPH_EYE, "split": "Fcl_EYE_Highlight_Hide"},
-    "Fcl_MTH_A": {"name": "あ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_A": {"name": "あ頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_A_Bone": {
         "name": "あボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4815,10 +4851,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_A_Group": {"name": "あ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_A", "Fcl_MTH_A_Bone"]},
-    "Fcl_MTH_I": {"name": "い頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_I": {"name": "い頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_I_Bone": {
         "name": "いボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4836,10 +4872,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_I_Group": {"name": "い", "panel": MORPH_LIP, "binds": ["Fcl_MTH_I", "Fcl_MTH_I_Bone"]},
-    "Fcl_MTH_U": {"name": "う頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_U": {"name": "う頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_U_Bone": {
         "name": "うボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4857,10 +4893,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_U_Group": {"name": "う", "panel": MORPH_LIP, "binds": ["Fcl_MTH_U", "Fcl_MTH_U_Bone"]},
-    "Fcl_MTH_E": {"name": "え頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_E": {"name": "え頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_E_Bone": {
         "name": "えボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4878,10 +4914,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_E_Group": {"name": "え", "panel": MORPH_LIP, "binds": ["Fcl_MTH_E", "Fcl_MTH_E_Bone"]},
-    "Fcl_MTH_O": {"name": "お頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_O": {"name": "お頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_O_Bone": {
         "name": "おボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4947,10 +4983,10 @@ MORPH_PAIRS = {
         "binds": ["Fcl_MTH_Fun_R", "Fcl_MTH_Fun_L", "Fcl_MTH_Large"],
         "ratios": [0.5, 0.5, -0.3],
     },
-    "Fcl_MTH_Joy": {"name": "ワ頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Joy": {"name": "ワ頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Joy_Bone": {
         "name": "ワボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4971,10 +5007,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_Joy_Group": {"name": "ワ", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Joy", "Fcl_MTH_Joy_Bone"]},
-    "Fcl_MTH_Sorrow": {"name": "▲頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Sorrow": {"name": "▲頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Sorrow_Bone": {
         "name": "▲ボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -4992,10 +5028,10 @@ MORPH_PAIRS = {
         ],
     },
     "Fcl_MTH_Sorrow_Group": {"name": "▲", "panel": MORPH_LIP, "binds": ["Fcl_MTH_Sorrow", "Fcl_MTH_Sorrow_Bone"]},
-    "Fcl_MTH_Surprised": {"name": "わー頂点", "panel": MORPH_LIP},
+    "Fcl_MTH_Surprised": {"name": "わー頂点", "panel": MORPH_SYSTEM},
     "Fcl_MTH_Surprised_Bone": {
         "name": "わーボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5022,7 +5058,7 @@ MORPH_PAIRS = {
     },
     "Fcl_MTH_tongueOut": {
         "name": "べーボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",
@@ -5047,7 +5083,7 @@ MORPH_PAIRS = {
     },
     "Fcl_MTH_tongueUp": {
         "name": "ぺろりボーン",
-        "panel": MORPH_LIP,
+        "panel": MORPH_SYSTEM,
         "bone": [
             "舌1",
             "舌2",

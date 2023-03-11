@@ -2631,8 +2631,7 @@ class VroidExportService:
         node_dict = {}
         node_name_dict = {}
         for nidx, node in enumerate(model.json_data["nodes"]):
-            if "translation" not in node:
-                continue
+            node_translation = MVector3D() if "translation" not in node else MVector3D(*node["translation"])
 
             node = model.json_data["nodes"][nidx]
             logger.debug(f"[{nidx:03d}] node: {node}")
@@ -2640,7 +2639,7 @@ class VroidExportService:
             node_name = node["name"]
 
             # 位置
-            position = MVector3D(*node["translation"]) * MIKU_METER * MVector3D(-1, 1, 1)
+            position = node_translation * MIKU_METER * MVector3D(-1, 1, 1)
 
             children = node["children"] if "children" in node else []
 
@@ -3040,7 +3039,7 @@ class VroidExportService:
                 model.name = file_name
                 model.english_name = file_name
 
-            model.comment += f"{logger.transtext('PMX出力')}: Vroid2Pmx\r\n"
+            model.comment += f"{logger.transtext('PMX出力')}: Vroid2Pmx {self.options.version_name}\r\n"
 
             model.comment += f"\r\n{logger.transtext('アバター情報')} -------\r\n"
 

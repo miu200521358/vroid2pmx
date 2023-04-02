@@ -300,6 +300,10 @@ https://fire.st/dcYCZZt
 Vroid2Pmx_2.01.04_β02 (2023/04/02) miumiu
 ・旧環境でビルドし直し（機能は変化なし）
 
+https://fire.st/idCe4fH
+Vroid2Pmx_2.01.04_β03 (2023/04/02) miumiu
+・旧環境でビルドし直し2回目（機能は変化なし）
+　（ビルド時のパス定義を修正）
 
 
 

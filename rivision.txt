@@ -290,6 +290,10 @@ https://fire.st/surw9If
 Vroid2Pmx_2.01.03_β02 (2023/03/12) miumiu
 ・ビルド環境が変わったため、再ビルド（機能は変化なし）
 
+https://fire.st/0e3bdlc
+Vroid2Pmx_2.01.04_β01 (2023/04/02) miumiu
+・VRoid Studio 1.21.0 で胸先ボーンに微量なウェイトが乗るようになってしまったので、
+　PmxTailor用設定ファイル生成時の割り当て材質名の抽出優先順番をウェイト頂点数降順に調整
 
 
 
@@ -312,9 +316,10 @@ https://com.nicovideo.jp/community/co5387214
 
 
 
-https://fire.st/rfawBr5
+https://fire.st/0e3bdlc
 <br>
 <br>
-・VRoid Studio 1.20.2 で親ボーンとまったく同じ位置にあるボーンに相対位置情報が出力されなくなったのに対応<br>
+・VRoid Studio 1.21.0 で胸先ボーンに微量なウェイトが乗るようになってしまったので、<br>
+　PmxTailor用設定ファイル生成時の割り当て材質名の抽出優先順番をウェイト頂点数降順に調整<br>
 <br>
 ぜひ使っていただいて、感想・不具合報告等お願いいたします。<br>

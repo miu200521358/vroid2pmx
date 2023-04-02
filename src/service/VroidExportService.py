@@ -179,15 +179,16 @@ class VroidExportService:
             bone_name = model.bone_indexes.get(bone_idx, None)
             for material_name, vidxs in model.material_vertices.items():
                 # 一定以上ウェイトが乗っている場合のみ対象とする
-                if [
+                weighted_vidxs = [
                     vidx
                     for vidx in list(set(vidxs) & set(bone_vidxs))
                     if bone_idx in model.vertex_dict[vidx].deform.get_idx_list(0.3)
-                ]:
+                ]
+                if weighted_vidxs:
                     if bone_name not in bone_materials:
                         bone_materials[bone_name] = []
                     if material_name not in bone_materials[bone_name]:
-                        bone_materials[bone_name].append(material_name)
+                        bone_materials[bone_name].append((len(weighted_vidxs), material_name))
 
                     if material_name not in material_bones:
                         material_bones[material_name] = []
@@ -310,7 +311,7 @@ class VroidExportService:
 
                     weighted_material_name = None
                     for target_name in target_names:
-                        for material_name in bone_materials.get(bone.name, []):
+                        for _, material_name in reversed(sorted(bone_materials.get(bone.name, []))):
                             if target_name in material_name:
                                 weighted_material_name = model.materials[material_name].name
                                 break
@@ -347,7 +348,7 @@ class VroidExportService:
         long_cnt = 1
 
         for bname, hbones in hair_bones.items():
-            material_name = bone_materials.get(hbones[0], [""])[0]
+            _, material_name = list(reversed(sorted(bone_materials.get(hbones[0], ["", ""]))))[0]
             material_name = model.materials[material_name].name if material_name else None
             if len(hbones) > 1 and (model.bones[hbones[0]].position - model.bones[hbones[1]].position).y() < 0:
                 if (HAIR_AHOGE, material_name) not in pmx_tailor_settings:

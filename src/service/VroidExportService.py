@@ -348,7 +348,7 @@ class VroidExportService:
         long_cnt = 1
 
         for bname, hbones in hair_bones.items():
-            _, material_name = list(reversed(sorted(bone_materials.get(hbones[0], ["", ""]))))[0]
+            _, material_name = list(reversed(sorted(bone_materials.get(hbones[0], (["", ""],)))))[0]
             material_name = model.materials[material_name].name if material_name else None
             if len(hbones) > 1 and (model.bones[hbones[0]].position - model.bones[hbones[1]].position).y() < 0:
                 if (HAIR_AHOGE, material_name) not in pmx_tailor_settings:

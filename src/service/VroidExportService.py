@@ -1949,6 +1949,7 @@ class VroidExportService:
         indices_by_materials = {}
         materials_by_type = {}
         registed_material_names = []
+        midx = 0
 
         for vertex_key, vertex_dict in vertex_blocks.items():
             start_vidx = vertex_dict["start"]
@@ -2154,7 +2155,7 @@ class VroidExportService:
                     if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
                         toon_sharing_flag = 0
                         if material_ext["textureProperties"]["_MainTex"] < len(model.json_data["images"]):
-                            toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]]["name"]}_Toon.bmp'
+                            toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]].get("name", f"M{midx:03d}")}_Toon.bmp'
                         else:
                             toon_img_name = f"{material_name}_Toon.bmp"
 
@@ -2220,6 +2221,7 @@ class VroidExportService:
                 material.vertex_count += len(indices)
 
                 logger.info("-- 面・材質データ解析[%s-%s]", index_accessor, material_accessor)
+                midx += 1
 
         # 材質を透過順に並べ替て設定
         index_idx = 0
@@ -3003,7 +3005,10 @@ class VroidExportService:
                 or "VRM" not in model.json_data["extensions"]
                 or "exporterVersion" not in model.json_data["extensions"]["VRM"]
             ):
-                logger.error("出力ソフト情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
+                logger.error(
+                    "出力ソフト情報がないため、処理を中断します。\nvrm1.0でエクスポートした場合、vrm0.0でエクスポートし直してください。",
+                    decoration=MLogger.DECORATION_BOX,
+                )
                 return None, None, None
 
             if (
@@ -3095,7 +3100,7 @@ class VroidExportService:
 
             # jsonデータの中に画像データの指定がある場合
             image_offset = 0
-            for image in model.json_data["images"]:
+            for iidx, image in enumerate(model.json_data["images"]):
                 if int(image["bufferView"]) < len(model.json_data["bufferViews"]):
                     image_buffer = model.json_data["bufferViews"][int(image["bufferView"])]
                     # 画像の開始位置はオフセット分ずらす
@@ -3103,9 +3108,12 @@ class VroidExportService:
                     # 拡張子
                     ext = MIME_TYPE[image["mimeType"]]
                     # 画像名
-                    image_name = f"{image['name']}.{ext}"
+                    if "name" in image:
+                        image_name = f"{image['name']}.{ext}"
+                    else:
+                        image_name = f"T{iidx:03d}.{ext}"
                     with open(os.path.join(glft_dir_path, image_name), "wb") as ibf:
-                        ibf.write(self.buffer[image_start : (image_start + image_buffer["byteLength"])])
+                        ibf.write(self.buffer[image_start:(image_start + image_buffer["byteLength"])])
                     # オフセット加算
                     image_offset += image_buffer["byteLength"]
                     # PMXに追記

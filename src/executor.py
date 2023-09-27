@@ -12,7 +12,7 @@ from form.MainFrame import MainFrame
 from utils.MLogger import MLogger
 from utils import MFileUtils
 
-VERSION_NAME = "2.01.06_β01"
+VERSION_NAME = "2.01.06_β02"
 
 # 指数表記なし、有効小数点桁数6、30を超えると省略あり、一行の文字数200
 np.set_printoptions(suppress=True, precision=6, threshold=30, linewidth=200)

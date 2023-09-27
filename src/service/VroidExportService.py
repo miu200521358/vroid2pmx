@@ -1050,7 +1050,7 @@ class VroidExportService:
         logger.info("-- -- モーフ調整準備")
 
         face_close_dict = {}
-        for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+        for base_offset in target_morphs.get("Fcl_EYE_Close", target_morphs["Face.M_F00_000_00_Fcl_EYE_Close"]).offsets:
             face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
 
         face_material_index_vertices = []
@@ -3019,14 +3019,14 @@ class VroidExportService:
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
                 return None, None, None
 
-            if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
-                # VRoid Studioベータ版はNG
-                logger.error(
-                    "VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s",
-                    model.json_data["extensions"]["VRM"]["exporterVersion"],
-                    decoration=MLogger.DECORATION_BOX,
-                )
-                return None, None, None
+            # if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
+            #     # VRoid Studioベータ版はNG
+            #     logger.error(
+            #         "VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s",
+            #         model.json_data["extensions"]["VRM"]["exporterVersion"],
+            #         decoration=MLogger.DECORATION_BOX,
+            #     )
+            #     return None, None, None
 
             if "VRoid Studio-1." not in model.json_data["extensions"]["VRM"]["exporterVersion"]:
                 # VRoid Studio正式版じゃなくても警告だけに留める
@@ -3113,7 +3113,7 @@ class VroidExportService:
                     else:
                         image_name = f"T{iidx:03d}.{ext}"
                     with open(os.path.join(glft_dir_path, image_name), "wb") as ibf:
-                        ibf.write(self.buffer[image_start:(image_start + image_buffer["byteLength"])])
+                        ibf.write(self.buffer[image_start : (image_start + image_buffer["byteLength"])])
                     # オフセット加算
                     image_offset += image_buffer["byteLength"]
                     # PMXに追記

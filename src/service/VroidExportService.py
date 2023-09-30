@@ -116,7 +116,7 @@ class VroidExportService:
 
     def vroid2pmx(self):
         try:
-            model, tex_dir_path, setting_dir_path = self.create_model()
+            model, tex_dir_path, setting_dir_path, is_vroid1 = self.create_model()
             if not model:
                 return False
 
@@ -132,7 +132,7 @@ class VroidExportService:
             if not model:
                 return False
 
-            model = self.convert_morph(model)
+            model = self.convert_morph(model, is_vroid1)
             if not model:
                 return False
 
@@ -1032,7 +1032,7 @@ class VroidExportService:
 
         return MVector3D(np.sum(normal.data() * bone_invert_mat, axis=1)).normalized()
 
-    def convert_morph(self, model: PmxModel):
+    def convert_morph(self, model: PmxModel, is_vroid1: bool):
         # グループモーフ定義
         if (
             "extensions" not in model.json_data
@@ -1050,8 +1050,9 @@ class VroidExportService:
         logger.info("-- -- モーフ調整準備")
 
         face_close_dict = {}
-        for base_offset in target_morphs.get("Fcl_EYE_Close", target_morphs["Face.M_F00_000_00_Fcl_EYE_Close"]).offsets:
-            face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
+        if is_vroid1:
+            for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+                face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
 
         face_material_index_vertices = []
         face_left_close_index_vertices = []
@@ -3028,6 +3029,8 @@ class VroidExportService:
             #     )
             #     return None, None, None
 
+            is_vroid1 = True
+
             if "VRoid Studio-1." not in model.json_data["extensions"]["VRM"]["exporterVersion"]:
                 # VRoid Studio正式版じゃなくても警告だけに留める
                 logger.warning(
@@ -3035,6 +3038,7 @@ class VroidExportService:
                     model.json_data["extensions"]["VRM"]["exporterVersion"],
                     decoration=MLogger.DECORATION_BOX,
                 )
+                is_vroid1 = False
 
             if "title" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.name = model.json_data["extensions"]["VRM"]["meta"]["title"]
@@ -3123,7 +3127,7 @@ class VroidExportService:
 
             logger.info("-- テクスチャデータ解析終了")
 
-        return model, tex_dir_path, setting_dir_path
+        return model, tex_dir_path, setting_dir_path, is_vroid1
 
     # アクセサ経由で値を取得する
     # https://github.com/ft-lab/Documents_glTF/blob/master/structure.md

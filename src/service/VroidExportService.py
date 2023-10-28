@@ -106,10 +106,18 @@ class VroidExportService:
         except MKilledException:
             return False
         except SizingException as se:
-            logger.error("Vroid2Pmx処理が処理できないデータで終了しました。\n\n%s", se.message, decoration=MLogger.DECORATION_BOX)
+            logger.error(
+                "Vroid2Pmx処理が処理できないデータで終了しました。\n\n%s\n%s",
+                "2.01.06",
+                se.message,
+                decoration=MLogger.DECORATION_BOX,
+            )
         except Exception:
             logger.critical(
-                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX
+                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s\n%s",
+                "2.01.06",
+                traceback.format_exc(),
+                decoration=MLogger.DECORATION_BOX,
             )
         finally:
             logging.shutdown()

@@ -411,5 +411,6 @@
     "-- 身体剛体準備終了": "--Completion of body rigid body preparation",
     "-- -- 身体剛体[%s]": "---- Body Rigid Body [ %s]",
     "舌関連頂点が見つからなかったため、舌分離処理をスキップします": "No tongue-related vertices found, skipping tongue separation processing",
-    "-- Aスタンス・親指調整終了": "-- Finished A stance/thumb adjustment"
+    "-- Aスタンス・親指調整終了": "-- Finished A stance/thumb adjustment",
+    "出力ソフト情報がないため、処理を中断します。\nvrm1.0でエクスポートした場合、vrm0.0でエクスポートし直してください。": "The process is aborted because there is no output software information. \nIf you exported with vrm1.0, please re-export with vrm0.0."
 }

@@ -106,17 +106,25 @@ class VroidExportService:
         except MKilledException:
             return False
         except SizingException as se:
-            logger.error("Vroid2Pmx処理が処理できないデータで終了しました。\n\n%s", se.message, decoration=MLogger.DECORATION_BOX)
+            logger.error(
+                "Vroid2Pmx処理が処理できないデータで終了しました。\n\n%s\n%s",
+                "2.01.06",
+                se.message,
+                decoration=MLogger.DECORATION_BOX,
+            )
         except Exception:
             logger.critical(
-                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s", traceback.format_exc(), decoration=MLogger.DECORATION_BOX
+                "Vroid2Pmx処理が意図せぬエラーで終了しました。\n\n%s\n%s",
+                "2.01.06",
+                traceback.format_exc(),
+                decoration=MLogger.DECORATION_BOX,
             )
         finally:
             logging.shutdown()
 
     def vroid2pmx(self):
         try:
-            model, tex_dir_path, setting_dir_path = self.create_model()
+            model, tex_dir_path, setting_dir_path, is_vroid1 = self.create_model()
             if not model:
                 return False
 
@@ -132,7 +140,7 @@ class VroidExportService:
             if not model:
                 return False
 
-            model = self.convert_morph(model)
+            model = self.convert_morph(model, is_vroid1)
             if not model:
                 return False
 
@@ -1032,7 +1040,7 @@ class VroidExportService:
 
         return MVector3D(np.sum(normal.data() * bone_invert_mat, axis=1)).normalized()
 
-    def convert_morph(self, model: PmxModel):
+    def convert_morph(self, model: PmxModel, is_vroid1: bool):
         # グループモーフ定義
         if (
             "extensions" not in model.json_data
@@ -1050,8 +1058,9 @@ class VroidExportService:
         logger.info("-- -- モーフ調整準備")
 
         face_close_dict = {}
-        for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
-            face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
+        if is_vroid1:
+            for base_offset in target_morphs["Fcl_EYE_Close"].offsets:
+                face_close_dict[base_offset.vertex_index] = base_offset.position_offset.copy().data()
 
         face_material_index_vertices = []
         face_left_close_index_vertices = []
@@ -1949,6 +1958,7 @@ class VroidExportService:
         indices_by_materials = {}
         materials_by_type = {}
         registed_material_names = []
+        midx = 0
 
         for vertex_key, vertex_dict in vertex_blocks.items():
             start_vidx = vertex_dict["start"]
@@ -2154,7 +2164,7 @@ class VroidExportService:
                     if "vectorProperties" in material_ext and "_ShadeColor" in material_ext["vectorProperties"]:
                         toon_sharing_flag = 0
                         if material_ext["textureProperties"]["_MainTex"] < len(model.json_data["images"]):
-                            toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]]["name"]}_Toon.bmp'
+                            toon_img_name = f'{model.json_data["images"][material_ext["textureProperties"]["_MainTex"]].get("name", f"M{midx:03d}")}_Toon.bmp'
                         else:
                             toon_img_name = f"{material_name}_Toon.bmp"
 
@@ -2220,6 +2230,7 @@ class VroidExportService:
                 material.vertex_count += len(indices)
 
                 logger.info("-- 面・材質データ解析[%s-%s]", index_accessor, material_accessor)
+                midx += 1
 
         # 材質を透過順に並べ替て設定
         index_idx = 0
@@ -3003,8 +3014,11 @@ class VroidExportService:
                 or "VRM" not in model.json_data["extensions"]
                 or "exporterVersion" not in model.json_data["extensions"]["VRM"]
             ):
-                logger.error("出力ソフト情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None, None
+                logger.error(
+                    "出力ソフト情報がないため、処理を中断します。\nvrm1.0でエクスポートした場合、vrm0.0でエクスポートし直してください。",
+                    decoration=MLogger.DECORATION_BOX,
+                )
+                return None, None, None, None
 
             if (
                 "extensions" not in model.json_data
@@ -3012,16 +3026,18 @@ class VroidExportService:
                 or "meta" not in model.json_data["extensions"]["VRM"]
             ):
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None, None
+                return None, None, None, None
 
-            if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
-                # VRoid Studioベータ版はNG
-                logger.error(
-                    "VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s",
-                    model.json_data["extensions"]["VRM"]["exporterVersion"],
-                    decoration=MLogger.DECORATION_BOX,
-                )
-                return None, None, None
+            # if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
+            #     # VRoid Studioベータ版はNG
+            #     logger.error(
+            #         "VRoid Studio ベータ版 で出力されたvrmデータではあるため、処理を中断します。\n正式版でコンバートしてから再度試してください。\n出力元: %s",
+            #         model.json_data["extensions"]["VRM"]["exporterVersion"],
+            #         decoration=MLogger.DECORATION_BOX,
+            #     )
+            #     return None, None, None
+
+            is_vroid1 = True
 
             if "VRoid Studio-1." not in model.json_data["extensions"]["VRM"]["exporterVersion"]:
                 # VRoid Studio正式版じゃなくても警告だけに留める
@@ -3030,6 +3046,7 @@ class VroidExportService:
                     model.json_data["extensions"]["VRM"]["exporterVersion"],
                     decoration=MLogger.DECORATION_BOX,
                 )
+                is_vroid1 = False
 
             if "title" in model.json_data["extensions"]["VRM"]["meta"]:
                 model.name = model.json_data["extensions"]["VRM"]["meta"]["title"]
@@ -3091,11 +3108,11 @@ class VroidExportService:
 
             if "images" not in model.json_data:
                 logger.error("変換可能な画像情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None, None
+                return None, None, None, None
 
             # jsonデータの中に画像データの指定がある場合
             image_offset = 0
-            for image in model.json_data["images"]:
+            for iidx, image in enumerate(model.json_data["images"]):
                 if int(image["bufferView"]) < len(model.json_data["bufferViews"]):
                     image_buffer = model.json_data["bufferViews"][int(image["bufferView"])]
                     # 画像の開始位置はオフセット分ずらす
@@ -3103,7 +3120,10 @@ class VroidExportService:
                     # 拡張子
                     ext = MIME_TYPE[image["mimeType"]]
                     # 画像名
-                    image_name = f"{image['name']}.{ext}"
+                    if "name" in image:
+                        image_name = f"{image['name']}.{ext}"
+                    else:
+                        image_name = f"T{iidx:03d}.{ext}"
                     with open(os.path.join(glft_dir_path, image_name), "wb") as ibf:
                         ibf.write(self.buffer[image_start : (image_start + image_buffer["byteLength"])])
                     # オフセット加算
@@ -3115,7 +3135,7 @@ class VroidExportService:
 
             logger.info("-- テクスチャデータ解析終了")
 
-        return model, tex_dir_path, setting_dir_path
+        return model, tex_dir_path, setting_dir_path, is_vroid1
 
     # アクセサ経由で値を取得する
     # https://github.com/ft-lab/Documents_glTF/blob/master/structure.md

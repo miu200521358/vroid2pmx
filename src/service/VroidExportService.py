@@ -3018,7 +3018,7 @@ class VroidExportService:
                     "出力ソフト情報がないため、処理を中断します。\nvrm1.0でエクスポートした場合、vrm0.0でエクスポートし直してください。",
                     decoration=MLogger.DECORATION_BOX,
                 )
-                return None, None, None
+                return None, None, None, None
 
             if (
                 "extensions" not in model.json_data
@@ -3026,7 +3026,7 @@ class VroidExportService:
                 or "meta" not in model.json_data["extensions"]["VRM"]
             ):
                 logger.error("メタ情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None, None
+                return None, None, None, None
 
             # if "VRoidStudio-0." in model.json_data["extensions"]["VRM"]["exporterVersion"]:
             #     # VRoid Studioベータ版はNG
@@ -3108,7 +3108,7 @@ class VroidExportService:
 
             if "images" not in model.json_data:
                 logger.error("変換可能な画像情報がないため、処理を中断します。", decoration=MLogger.DECORATION_BOX)
-                return None, None, None
+                return None, None, None, None
 
             # jsonデータの中に画像データの指定がある場合
             image_offset = 0

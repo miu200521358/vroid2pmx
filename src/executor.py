@@ -12,7 +12,7 @@ from form.MainFrame import MainFrame
 from utils.MLogger import MLogger
 from utils import MFileUtils
 
-VERSION_NAME = "2.01.06"
+VERSION_NAME = "2.01.07_β01"
 
 # 指数表記なし、有効小数点桁数6、30を超えると省略あり、一行の文字数200
 np.set_printoptions(suppress=True, precision=6, threshold=30, linewidth=200)
@@ -48,7 +48,9 @@ if __name__ == "__main__":
         # 省エネモード
         is_saving = True if args.is_saving == 1 else False
 
-        MLogger.initialize(level=args.verbose, is_file=False, target_lang=args.lang, mode=args.log_mode)
+        MLogger.initialize(
+            level=args.verbose, is_file=False, target_lang=args.lang, mode=args.log_mode
+        )
         logger = MLogger(__name__)
 
         log_level_name = ""
@@ -75,8 +77,12 @@ if __name__ == "__main__":
 
         # 引数指定がない場合、通常起動
         app = wx.App(False)
-        icon = wx.Icon(MFileUtils.resource_path("src/vroid2pmx.ico"), wx.BITMAP_TYPE_ICO)
-        frame = MainFrame(None, mydir_path, now_version_name, args.verbose, is_saving, is_out_log)
+        icon = wx.Icon(
+            MFileUtils.resource_path("src/vroid2pmx.ico"), wx.BITMAP_TYPE_ICO
+        )
+        frame = MainFrame(
+            None, mydir_path, now_version_name, args.verbose, is_saving, is_out_log
+        )
         frame.SetIcon(icon)
         frame.Show(True)
         app.MainLoop()

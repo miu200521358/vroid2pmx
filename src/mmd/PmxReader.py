@@ -1213,6 +1213,7 @@ class PmxReader:
 
     def hexdigest(self):
         sha1 = hashlib.sha1()
+        chunk = b""
 
         with open(self.file_path, "rb") as f:
             for chunk in iter(lambda: f.read(2048 * sha1.block_size), b""):
